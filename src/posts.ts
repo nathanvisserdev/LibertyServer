@@ -88,38 +88,63 @@ router.get("/posts", auth, async (req, res) => {
   res.json(posts);
 });
 
-// --- Public Feed (no group logic) ---
-router.get("/feed/public-square", async (req, res) => {
-  try {
-    const take = Math.min(Number(req.query.take) || 30, 100);
-    const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
 
+// GET /feed  -> posts from me, my acquaintances, my strangers, and users I follow
+router.get("/feed", auth, async (req, res) => {
+  const me = (req as any).user.id as string;
 
-    const itemsRaw = await prisma.posts.findMany({
+  const [undirected, following] = await Promise.all([
+    prisma.connections.findMany({
       where: {
-        groupId: null,
+        type: { in: ["ACQUAINTANCE", "STRANGER"] },
+        OR: [{ requesterId: me }, { requestedId: me }],
       },
-      include: {
-        user: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take,
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    });
+      select: { requesterId: true, requestedId: true, type: true },
+    }),
+    prisma.connections.findMany({
+      where: { type: "FOLLOW", requesterId: me },
+      select: { requestedId: true },
+    }),
+  ]);
 
-    // Ensure every item includes a relation field
-    const items = itemsRaw;
-
-    const hasNext = Array.isArray(items) && items.length === take && items.at(-1)?.id;
-    res.json({
-      items,
-      nextCursor: hasNext ? items.at(-1)!.id : null,
-    });
-
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "public-square-failed" });
+  const acquaintances = new Set<string>();
+  const strangers     = new Set<string>();
+  for (const r of undirected) {
+    const other = r.requesterId === me ? r.requestedId : r.requesterId;
+    (r.type === "ACQUAINTANCE" ? acquaintances : strangers).add(other);
   }
+  const followingIds = new Set(following.map(r => r.requestedId));
+
+  const authorIds = Array.from(new Set([me, ...acquaintances, ...strangers, ...followingIds]));
+
+  const posts = await prisma.posts.findMany({
+    where: { userId: { in: authorIds } },
+    orderBy: { createdAt: "desc" },
+    include: { user: true },
+    take: 50,
+  });
+
+  const toRelation = (authorId: string) =>
+    authorId === me
+      ? "SELF"
+      : acquaintances.has(authorId)
+      ? "ACQUAINTANCE"
+      : strangers.has(authorId)
+      ? "STRANGER"
+      : followingIds.has(authorId)
+      ? "FOLLOWING"
+      : "NONE";
+
+  res.json(
+    posts.map(p => ({
+      id: p.id,
+      userId: p.userId,
+      content: p.content,
+      createdAt: p.createdAt,
+      user: { id: p.user.id, email: p.user.email },
+      relation: toRelation(p.userId),
+    }))
+  );
 });
 
 export default router;
