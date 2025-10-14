@@ -42,53 +42,6 @@ router.post("/posts", auth, async (req, res) => {
   }
 });
 
-// --- Get Posts (optionally by group) with block filtering ---
-router.get("/posts", auth, async (req, res) => {
-  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
-    return res.status(401).send("Invalid token payload");
-  }
-  const me = (req.user as any).id;
-  const groupId = typeof req.query.groupId === "string" ? req.query.groupId : undefined;
-
-  const [iBlocked, blockedMe] = await Promise.all([
-    prisma.blocks.findMany({ where: { blockerId: me }, select: { blockedId: true } }),
-    prisma.blocks.findMany({ where: { blockedId: me }, select: { blockerId: true } }),
-  ]);
-  const blocked = new Set([
-    ...iBlocked.map(b => b.blockedId),
-    ...blockedMe.map(b => b.blockerId),
-  ]);
-
-  let groupWhere = undefined;
-  if (groupId) {
-  const g = await prisma.groups.findUnique({ where: { id: groupId as string } });
-    if (!g) return res.status(404).send("group not found");
-
-    if (g.groupType === "PERSONAL") {
-      if (g.adminId !== me) return res.sendStatus(404);
-    } else if (g.groupType === "PRIVATE") {
-      const member = await prisma.groupRoster.findUnique({
-        where: { userId_groupId: { userId: me, groupId: groupId as string } },
-      });
-      if (!member) return res.sendStatus(403);
-    }
-    groupWhere = { groupId };
-  }
-
-  const posts = await prisma.posts.findMany({
-    where: {
-      ...groupWhere,
-      userId: { notIn: Array.from(blocked) },
-    },
-    include: { user: true, group: true },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-
-  res.json(posts);
-});
-
-
 // GET /feed  -> posts from me, my acquaintances, my strangers, and users I follow
 router.get("/feed", auth, async (req, res) => {
   const me = (req as any).user.id as string;
