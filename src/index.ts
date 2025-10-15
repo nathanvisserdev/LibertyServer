@@ -8,6 +8,7 @@ import blocksRouter from "./blocks.js";
 import postsRouter from "./posts.js";
 import groupsRouter from "./groups.js";
 import miscRouter from "./misc.js";
+import usersRouter from "./users.js";
 
 const app = express();
 app.use(express.json());
@@ -18,6 +19,7 @@ app.use(cors({ origin: CORS_ORIGIN || true }));
 
 app.use(miscRouter);
 app.use(authRouter);
+app.use(usersRouter);
 app.use(blocksRouter);
 app.use(postsRouter);
 app.use(groupsRouter);

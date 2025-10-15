@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
-import { app } from "../src/index.js";
+import { app } from "../index.js";
 
 describe("feed endpoints", () => {
   it("GET /feed/public-square returns items and nextCursor", async () => {

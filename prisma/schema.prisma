@@ -27,6 +27,13 @@ enum GroupType {
   PERSONAL   // Social Circle (owner = admin)
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
 enum PostVisibility {
   PUBLIC        // shows in Public Square if not in PRIVATE/PERSONAL group
   CONNECTIONS   // author’s connections only
@@ -41,7 +48,7 @@ model Users {
   lastName      String?
   username      String?   @unique
   dateOfBirth   DateTime?
-  gender        Boolean?
+  gender        Gender?
   phoneNumber   String?
   zipCode       String?
   photo         String?
@@ -70,17 +77,8 @@ model Users {
   blocksInitiated Blocks[] @relation("blocks_blocker")
   blocksReceived  Blocks[] @relation("blocks_blocked")
 
-  // optional creator profile
-  creator Creator?
-
   // groups this user administers
   adminGroups Groups[] @relation("GroupAdmin")
-}
-
-model Creator {
-  userId                   String  @id
-  user                     Users   @relation(fields: [userId], references: [id])
-  acceptsAllFollowRequests Boolean @default(false)
 }
 
 model Groups {
@@ -151,7 +149,7 @@ model ConnectionRequest {
 model Connections {
   id          String         @id @default(cuid())
   requesterId String // FOLLOW: followerId; others: min(userA,userB)
-  requestedId String // FOLLOW: creatorId;  others: max(userA,userB)
+  requestedId String // FOLLOW: userId;  others: max(userA,userB)
   type        ConnectionType
   since       DateTime       @default(now())
 

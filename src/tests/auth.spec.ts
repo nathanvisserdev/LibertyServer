@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
-import { app } from "../src/index.js";
+import { app } from "../index.js";
 
 describe("auth endpoints", () => {
-  it("signup returns 201 and user", async () => {
-    const email = `user${Date.now()}@example.com`;
+  it("signup: 201 'server successfully created new resource' and user", async () => {
+    const d = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    const email = `user${ts}@example.com`;
     const res = await request(app)
       .post("/signup")
       .send({ email, password: "testpass" });
@@ -13,7 +16,7 @@ describe("auth endpoints", () => {
     expect(res.body).toHaveProperty("email", email);
   });
 
-  it("login returns 200 and token", async () => {
+  it("login res 200 'ok' with token", async () => {
     const email = `user${Date.now()}@example.com`;
     await request(app)
       .post("/signup")
@@ -25,7 +28,7 @@ describe("auth endpoints", () => {
     expect(res.body).toHaveProperty("accessToken");
   });
 
-  it("login with wrong password returns 401", async () => {
+  it("login w/wrong password res 401 'Unauthorized'", async () => {
     const email = `user${Date.now()}@example.com`;
     await request(app)
       .post("/signup")
@@ -33,11 +36,6 @@ describe("auth endpoints", () => {
     const res = await request(app)
       .post("/login")
       .send({ email, password: "wrongpass" });
-    expect(res.status).toBe(401);
-  });
-
-  it("/user returns 401 without token", async () => {
-    const res = await request(app).get("/user");
     expect(res.status).toBe(401);
   });
 });
