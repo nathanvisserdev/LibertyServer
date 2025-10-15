@@ -453,4 +453,381 @@ describe("posts endpoints", () => {
       expect(post.user.email).toBe(email);
     });
   });
+
+  describe("PATCH /posts/:postId", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const res = await request(app)
+        .patch("/posts/some-id")
+        .send({ content: "Updated content" });
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 400 bad request when postId is invalid", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      const res = await request(app)
+        .patch("/posts/")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Updated content" });
+      
+      expect(res.status).toBe(404); // Express will return 404 for missing route parameter
+    });
+
+    it("returns 404 not found when post does not exist", async () => {
+      const { token } = await createUserAndGetToken();
+      const nonExistentPostId = "non-existent-post-id";
+      
+      const res = await request(app)
+        .patch(`/posts/${nonExistentPostId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Updated content" });
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Post not found");
+    });
+
+    it("returns 403 forbidden when trying to update another user's post", async () => {
+      // Create first user and post
+      const { token: token1 } = await createUserAndGetToken();
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token1}`)
+        .send({ content: "Original post" });
+      
+      const postId = createRes.body.id;
+      
+      // Create second user
+      const { token: token2 } = await createUserAndGetToken();
+      
+      // Try to update first user's post with second user's token
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token2}`)
+        .send({ content: "Updated by another user" });
+      
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("Can only update your own posts");
+    });
+
+    it("returns 400 bad request when content is invalid (empty after trim)", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      
+      // Try to update with empty content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "   " });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Invalid content");
+    });
+
+    it("returns 400 bad request when content exceeds 500 characters", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const longContent = "a".repeat(501);
+      
+      // Try to update with too long content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: longContent });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Invalid content");
+    });
+
+    it("returns 400 bad request when visibility is invalid", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      
+      // Try to update with invalid visibility
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ visibility: "INVALID" });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Invalid visibility. Must be PUBLIC or GROUP");
+    });
+
+    it("returns 400 bad request when trying to set GROUP visibility on non-group post", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a public post (no groupId)
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Public post" });
+      
+      const postId = createRes.body.id;
+      
+      // Try to change visibility to GROUP
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ visibility: "GROUP" });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Cannot set GROUP visibility on posts without a group");
+    });
+
+    it("returns 400 bad requestwhen no valid fields to update", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      
+      // Try to update with no valid fields
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({});
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("No valid fields to update");
+    });
+
+    it("successfully updates post content", async () => {
+      const { token, userId } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const updatedContent = "Updated content";
+      
+      // Update the post content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: updatedContent });
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("id", postId);
+      expect(res.body).toHaveProperty("content", updatedContent);
+      expect(res.body).toHaveProperty("userId", userId);
+      expect(res.body).toHaveProperty("createdAt");
+      expect(res.body).toHaveProperty("visibility", "PUBLIC");
+      expect(res.body).toHaveProperty("groupId", null);
+    });
+
+    it("successfully updates post with exactly 500 characters", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const updatedContent = "a".repeat(500);
+      
+      // Update the post content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: updatedContent });
+      
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe(updatedContent);
+      expect(res.body.content.length).toBe(500);
+    });
+
+    it("trims whitespace from updated content", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const updatedContent = "  Updated content with spaces  ";
+      const trimmedContent = updatedContent.trim();
+      
+      // Update the post content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: updatedContent });
+      
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe(trimmedContent);
+    });
+
+    it("handles special characters and unicode in updated content", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const updatedContent = "Updated with émojis 🚀 and special chars: @#$%^&*()";
+      
+      // Update the post content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: updatedContent });
+      
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe(updatedContent);
+    });
+
+    it("converts non-string content to string and trims", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      
+      // Update with number content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: 54321 });
+      
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe("54321");
+    });
+
+    it("ignores forbidden fields and only updates allowed ones", async () => {
+      const { token, userId } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const originalCreatedAt = createRes.body.createdAt;
+      const updatedContent = "Updated content";
+      
+      // Try to update with forbidden fields
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          content: updatedContent,
+          userId: "different-user-id", // Should be ignored
+          id: "different-id", // Should be ignored
+          createdAt: "2023-01-01T00:00:00.000Z", // Should be ignored
+          groupId: "some-group-id" // Should be ignored
+        });
+      
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe(updatedContent);
+      expect(res.body.userId).toBe(userId); // Should remain unchanged
+      expect(res.body.id).toBe(postId); // Should remain unchanged
+      expect(res.body.createdAt).toBe(originalCreatedAt); // Should remain unchanged
+      expect(res.body.groupId).toBe(null); // Should remain unchanged
+    });
+
+    it("preserves other fields when updating only content", async () => {
+      const { token, userId } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      const originalCreatedAt = createRes.body.createdAt;
+      const originalVisibility = createRes.body.visibility;
+      const updatedContent = "Only content updated";
+      
+      // Update only content
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: updatedContent });
+      
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe(updatedContent);
+      expect(res.body.userId).toBe(userId);
+      expect(res.body.id).toBe(postId);
+      expect(res.body.createdAt).toBe(originalCreatedAt);
+      expect(res.body.visibility).toBe(originalVisibility);
+      expect(res.body.groupId).toBe(null);
+    });
+
+    it("includes all required fields in response", async () => {
+      const { token } = await createUserAndGetToken();
+      
+      // Create a post first
+      const createRes = await request(app)
+        .post("/posts")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Original content" });
+      
+      const postId = createRes.body.id;
+      
+      // Update the post
+      const res = await request(app)
+        .patch(`/posts/${postId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ content: "Updated content" });
+      
+      expect(res.status).toBe(200);
+      
+      // Verify all required fields are present
+      expect(res.body).toHaveProperty("id");
+      expect(res.body).toHaveProperty("content");
+      expect(res.body).toHaveProperty("createdAt");
+      expect(res.body).toHaveProperty("userId");
+      expect(res.body).toHaveProperty("groupId");
+      expect(res.body).toHaveProperty("visibility");
+      
+      // Verify data types
+      expect(typeof res.body.id).toBe("string");
+      expect(typeof res.body.content).toBe("string");
+      expect(typeof res.body.createdAt).toBe("string");
+      expect(typeof res.body.userId).toBe("string");
+      expect(typeof res.body.visibility).toBe("string");
+      // groupId can be null for public posts
+      expect(res.body.groupId === null || typeof res.body.groupId === "string").toBe(true);
+    });
+  });
 });

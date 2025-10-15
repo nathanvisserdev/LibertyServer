@@ -126,4 +126,89 @@ router.get("/feed", auth, async (req, res) => {
   );
 });
 
+// PATCH /posts/:postId - Update post content and/or visibility
+router.patch("/posts/:postId", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = (req.user as any).id;
+  const { postId } = req.params;
+  const { content, visibility } = req.body ?? {};
+
+  // Validate postId
+  if (!postId || typeof postId !== "string") {
+    return res.status(400).send("Invalid post ID");
+  }
+
+  // Check if post exists and user owns it
+  const existingPost = await prisma.posts.findUnique({
+    where: { id: postId },
+    select: { id: true, userId: true, content: true, visibility: true, groupId: true },
+  });
+
+  if (!existingPost) {
+    return res.status(404).send("Post not found");
+  }
+
+  if (existingPost.userId !== me) {
+    return res.status(403).send("Can only update your own posts");
+  }
+
+  // Prepare update data
+  const updateData: any = {};
+
+  // Validate and update content if provided
+  if (content !== undefined) {
+    const text = String(content).trim();
+    if (!text || text.length > 500) {
+      return res.status(400).send("Invalid content");
+    }
+    updateData.content = text;
+  }
+
+  // Validate and update visibility if provided
+  if (visibility !== undefined) {
+    if (!["PUBLIC", "GROUP"].includes(visibility)) {
+      return res.status(400).send("Invalid visibility. Must be PUBLIC or GROUP");
+    }
+    
+    // If changing to GROUP visibility, ensure post has a groupId
+    if (visibility === "GROUP" && !existingPost.groupId) {
+      return res.status(400).send("Cannot set GROUP visibility on posts without a group");
+    }
+    
+    // If changing to PUBLIC visibility, ensure post is not in a group
+    if (visibility === "PUBLIC" && existingPost.groupId) {
+      return res.status(400).send("Cannot set PUBLIC visibility on group posts");
+    }
+    
+    updateData.visibility = visibility;
+  }
+
+  // Check if there's anything to update
+  if (Object.keys(updateData).length === 0) {
+    return res.status(400).send("No valid fields to update");
+  }
+
+  try {
+    const updatedPost = await prisma.posts.update({
+      where: { id: postId },
+      data: updateData,
+      select: { 
+        id: true, 
+        content: true, 
+        createdAt: true, 
+        userId: true, 
+        groupId: true, 
+        visibility: true 
+      },
+    });
+
+    res.status(200).json(updatedPost);
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 export default router;
