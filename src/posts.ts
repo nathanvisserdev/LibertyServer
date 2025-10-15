@@ -211,4 +211,71 @@ router.patch("/posts/:postId", auth, async (req, res) => {
   }
 });
 
+// DELETE /posts/:postId - Delete a post
+router.delete("/posts/:postId", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = (req.user as any).id;
+  const { postId } = req.params;
+
+  // Validate postId
+  if (!postId || typeof postId !== "string") {
+    return res.status(400).send("Invalid post ID");
+  }
+
+  try {
+    // Check if post exists and get its details
+    const existingPost = await prisma.posts.findUnique({
+      where: { id: postId },
+      select: { 
+        id: true, 
+        userId: true, 
+        groupId: true, 
+        visibility: true 
+      },
+    });
+
+    if (!existingPost) {
+      return res.status(404).send("Post not found");
+    }
+
+    // Authorization logic
+    let canDelete = false;
+
+    // If the user is the author, they can always delete
+    if (existingPost.userId === me) {
+      canDelete = true;
+    }
+    // If the post is in a group, check if user is the group admin
+    else if (existingPost.groupId) {
+      const group = await prisma.groups.findUnique({
+        where: { id: existingPost.groupId },
+        select: { adminId: true },
+      });
+      
+      if (group && group.adminId === me) {
+        canDelete = true;
+      }
+    }
+
+    if (!canDelete) {
+      return res.status(403).send("Can only delete your own posts or posts in groups you admin");
+    }
+
+    // Delete the post
+    await prisma.posts.delete({
+      where: { id: postId },
+    });
+
+    res.status(204).end();
+  } catch (e) {
+    console.error(e);
+    if (e instanceof Error && e.message.includes("Record to delete does not exist")) {
+      return res.status(404).send("Post not found");
+    }
+    return res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 export default router;
