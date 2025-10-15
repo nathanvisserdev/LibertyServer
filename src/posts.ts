@@ -6,41 +6,67 @@ import { auth } from "./misc.js";
 const prisma = new PrismaClient();
 const router = Router();
 
-// --- Create Post (≤500 chars) for Public Feed (auth required, no group) ---
+// --- Create Post (≤500 chars). Public by default; or to a group if groupId provided ---
 router.post("/posts", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
   }
   const me = req.user as any;
-  const { content } = req.body ?? {};
+  const { content, groupId } = req.body ?? {};
 
-  if (!content || String(content).trim().length === 0 || String(content).length > 500) {
-    return res.status(400).send("Invalid content");
-  }
+  const text = String(content ?? "").trim();
+  if (!text || text.length > 500) return res.status(400).send("Invalid content");
+
+  // Optional: block banned users from posting
+  const meRow = await prisma.users.findUnique({ where: { id: me.id }, select: { isBanned: true } });
+  if (!meRow) return res.status(404).send("User not found");
+  if (meRow.isBanned) return res.status(403).send("account banned");
 
   try {
-    const post = await prisma.posts.create({
-      data: {
-        userId: me.id,
-        content: String(content),
-      },
-    });
+    // No groupId -> public post
+    if (!groupId) {
+      const post = await prisma.posts.create({
+        data: { userId: me.id, content: text, visibility: "PUBLIC" },
+        select: { id: true, content: true, createdAt: true, userId: true, groupId: true, visibility: true },
+      });
+      return res.status(201).json(post);
+    }
 
-    res.status(201).json({
-      id: post.id,
-      content: post.content,
-      createdAt: post.createdAt,
-      userId: post.userId,
+    // With groupId -> validate group & membership policy
+    const group = await prisma.groups.findUnique({
+      where: { id: String(groupId) },
+      select: { id: true, groupType: true },
     });
+    if (!group) return res.status(404).send("Group not found");
+
+    // Membership required for PRIVATE or PERSONAL; PUBLIC can be open-post (policy choice)
+    if (group.groupType === "PRIVATE" || group.groupType === "PERSONAL") {
+      const member = await prisma.groupRoster.findUnique({
+        where: { userId_groupId: { userId: me.id, groupId: group.id } },
+        select: { membershipId: true },
+      });
+      if (!member) return res.status(403).send("Not a member of this group");
+    }
+    // PUBLIC group posts require membership as well (policy choice)
+    else {
+      const member = await prisma.groupRoster.findUnique({
+        where: { userId_groupId: { userId: me.id, groupId: group.id } },
+        select: { membershipId: true },
+      });
+      if (!member) return res.status(403).send("Not a member of this group");
+    }
+
+    const post = await prisma.posts.create({
+      data: { userId: me.id, groupId: group.id, content: text, visibility: "GROUP" }, // force GROUP visibility
+      select: { id: true, content: true, createdAt: true, userId: true, groupId: true, visibility: true },
+    });
+    return res.status(201).json(post);
   } catch (e) {
     console.error(e);
-    if (e instanceof Error) {
-      res.status(400).json({ error: e.message });
-    } else {
-      res.status(400).json({ error: String(e) });
-    }
+    return res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
   }
 });
+
 
 // GET /feed  -> posts from me, my acquaintances, my strangers, and users I follow
 router.get("/feed", auth, async (req, res) => {
