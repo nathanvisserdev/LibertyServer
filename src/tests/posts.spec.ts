@@ -5,11 +5,18 @@ import { app } from "../index.js";
 // Helper function to create a user and get token
 async function createUserAndGetToken(email?: string, password?: string) {
   const userEmail = email || `user${Date.now()}@example.com`;
-  const userPassword = password || "testpass";
+  const userPassword = password || "testpass123";
+  const timestamp = Date.now();
   
   const signupRes = await request(app)
     .post("/signup")
-    .send({ email: userEmail, password: userPassword });
+    .send({ 
+      email: userEmail, 
+      password: userPassword,
+      firstName: "Test",
+      lastName: "User",
+      username: `user${timestamp}`
+    });
   
   const loginRes = await request(app)
     .post("/login")

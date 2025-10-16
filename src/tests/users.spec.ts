@@ -5,11 +5,18 @@ import { app } from "../index.js";
 // Helper function to create a user and get token
 async function createUserAndGetToken(email?: string, password?: string) {
   const userEmail = email || `user${Date.now()}@example.com`;
-  const userPassword = password || "testpass";
+  const userPassword = password || "testpass123";
+  const timestamp = Date.now();
   
   const signupRes = await request(app)
     .post("/signup")
-    .send({ email: userEmail, password: userPassword });
+    .send({ 
+      email: userEmail, 
+      password: userPassword,
+      firstName: "Test",
+      lastName: "User", 
+      username: `user${timestamp}`
+    });
   
   const loginRes = await request(app)
     .post("/login")
@@ -18,7 +25,8 @@ async function createUserAndGetToken(email?: string, password?: string) {
   return {
     userId: signupRes.body.id,
     token: loginRes.body.accessToken,
-    email: userEmail
+    email: userEmail,
+    password: userPassword
   };
 }
 
@@ -238,7 +246,7 @@ describe("user endpoints", () => {
     it("returns 401 unauthorized without authentication token", async () => {
       const res = await request(app)
         .delete("/user/me")
-        .send({ password: "testpass" });
+        .send({ password: "testpass123" });
       expect(res.status).toBe(401);
     });
 
@@ -279,7 +287,7 @@ describe("user endpoints", () => {
     });
 
     it("successfully deletes user with correct password", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const email = `delete-test-${Date.now()}@example.com`;
       const { userId, token } = await createUserAndGetToken(email, password);
       
@@ -299,7 +307,7 @@ describe("user endpoints", () => {
     });
 
     it("returns 409 conflict when user administers non-PERSONAL groups without force", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const { token } = await createUserAndGetToken("admin@test.com", password);
       
       // Create a non-PERSONAL group (this would need to be done via API or direct DB insert)
@@ -317,7 +325,7 @@ describe("user endpoints", () => {
     });
 
     it("successfully deletes user with non-PERSONAL groups when force=true", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const { token } = await createUserAndGetToken("admin@test.com", password);
       
       const res = await request(app)
@@ -329,7 +337,7 @@ describe("user endpoints", () => {
     });
 
     it("handles case-insensitive force parameter", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const { token } = await createUserAndGetToken("admin@test.com", password);
       
       const res = await request(app)
@@ -341,7 +349,7 @@ describe("user endpoints", () => {
     });
 
     it("deletes user even without force when only PERSONAL groups exist", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const email = `personal-test-${Date.now()}@example.com`;
       const { token } = await createUserAndGetToken(email, password);
       
@@ -356,7 +364,7 @@ describe("user endpoints", () => {
     });
 
     it("cleans up user data properly", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const { userId, token, email } = await createUserAndGetToken("cleanup@test.com", password);
       
       // Delete the user
@@ -383,23 +391,18 @@ describe("user endpoints", () => {
     });
 
     it("returns specific error message for group admin conflict", async () => {
-      const password = "testpass";
+      const password = "testpass123";
       const { token } = await createUserAndGetToken("admin@test.com", password);
       
-      // This test assumes the user might have non-PERSONAL groups
+      // Users with only PERSONAL groups should be able to delete without conflict
+      // PERSONAL groups are excluded from the admin conflict check
       const res = await request(app)
         .delete("/user/me")
         .set("Authorization", `Bearer ${token}`)
         .send({ password });
       
-      if (res.status === 409) {
-        expect(res.body).toHaveProperty("error", "user_is_group_admin");
-        expect(res.body).toHaveProperty("message");
-        expect(res.body.message).toContain("force=true");
-      } else {
-        // If no groups exist, deletion should succeed
-        expect(res.status).toBe(204);
-      }
+      // Should succeed because user only has PERSONAL group (Social Circle)
+      expect(res.status).toBe(204);
     });
   });
 });

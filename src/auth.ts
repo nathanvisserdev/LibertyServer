@@ -12,32 +12,111 @@ const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 const JWT_SECRET = process.env.JWT_SECRET ?? "";
 if (!JWT_SECRET) throw new Error("Missing JWT_SECRET in .env");
 
-// --- Signup (email + password) ---
+// --- Signup (email + password + firstName + lastName + username) ---
 router.post("/signup", async (req, res) => {
-  const { email, password } = req.body ?? {};
-  if (!email || !password) return res.status(400).send("missing email or password");
+  const { email, password, firstName, lastName, username } = req.body ?? {};
+  
+  // Check required fields
+  if (!email || !password || !firstName || !lastName || !username) {
+    return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName, username" });
+  }
+
+  // Validate email format (basic)
+  const emailStr = String(email).toLowerCase().trim();
+  if (!emailStr.includes("@") || emailStr.length < 3) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  // Validate password length
+  if (String(password).length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters long" });
+  }
+
+  // Validate firstName
+  const firstNameStr = String(firstName).trim();
+  if (firstNameStr.length === 0 || firstNameStr.length > 50) {
+    return res.status(400).json({ error: "firstName must be non-empty and at most 50 characters" });
+  }
+
+  // Validate lastName
+  const lastNameStr = String(lastName).trim();
+  if (lastNameStr.length === 0 || lastNameStr.length > 50) {
+    return res.status(400).json({ error: "lastName must be non-empty and at most 50 characters" });
+  }
+
+  // Validate username format and length
+  const usernameStr = String(username).toLowerCase().trim();
+  const usernameRegex = /^[a-z0-9_.]{3,32}$/;
+  if (!usernameRegex.test(usernameStr)) {
+    return res.status(400).json({ error: "Username must be 3-32 characters and contain only lowercase letters, numbers, underscores, and periods" });
+  }
+
   try {
-    const hash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
-    const user = await prisma.users.create({
-      data: { email: String(email).toLowerCase(), password: hash },
+    const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+    
+    // Use Prisma transaction to create user, group, and roster entry
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create the user
+      const user = await tx.users.create({
+        data: {
+          email: emailStr,
+          password: passwordHash,
+          firstName: firstNameStr,
+          lastName: lastNameStr,
+          username: usernameStr,
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          createdAt: true,
+          isPrivateUser: true,
+        },
+      });
+
+      // 2. Create their PERSONAL "Social Circle" group
+      const group = await tx.groups.create({
+        data: {
+          name: "Social Circle",
+          description: "Your personal group",
+          groupType: "PERSONAL",
+          adminId: user.id,
+        },
+      });
+
+      // 3. Add user to their own group via GroupRoster
+      await tx.groupRoster.create({
+        data: {
+          userId: user.id,
+          groupId: group.id,
+        },
+      });
+
+      return user;
     });
 
-    // Ensure exactly one PERSONAL group per user (Social Circle)
-    await prisma.groups.create({
-      data: {
-        name: "Social Circle",
-        description: "Your personal group",
-        groupType: "PERSONAL",
-        adminId: user.id,
-      },
-    });
-
-    res.status(201).json({ id: user.id, email: user.email });
+    res.status(201).json(result);
   } catch (err) {
+    if (err instanceof Error && "code" in err) {
+      if (err.code === "P2002") {
+        // Unique constraint violation
+        const meta = (err as any).meta;
+        if (meta?.target?.includes("email")) {
+          return res.status(409).json({ error: "Email already exists" });
+        } else if (meta?.target?.includes("username")) {
+          return res.status(409).json({ error: "Username already exists" });
+        } else {
+          return res.status(409).json({ error: "Email or username already exists" });
+        }
+      }
+    }
+    
     if (err instanceof Error) {
-      res.status(400).json({ error: err.message });
+      return res.status(400).json({ error: err.message });
     } else {
-      res.status(400).json({ error: String(err) });
+      return res.status(400).json({ error: String(err) });
     }
   }
 });
