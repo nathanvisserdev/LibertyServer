@@ -14,7 +14,12 @@ if (!JWT_SECRET) throw new Error("Missing JWT_SECRET in .env");
 
 // --- Signup (email + password + firstName + lastName + username) ---
 router.post("/signup", async (req, res) => {
-  const { email, password, firstName, lastName, username } = req.body ?? {};
+  const { email, password, firstName, lastName, username, isPaid } = req.body ?? {};
+  
+  // Reject isPaid field if present in request body
+  if (isPaid !== undefined) {
+    return res.status(400).json({ error: "isPaid field is not allowed in signup request" });
+  }
   
   // Check required fields
   if (!email || !password || !firstName || !lastName || !username) {
@@ -64,6 +69,7 @@ router.post("/signup", async (req, res) => {
           firstName: firstNameStr,
           lastName: lastNameStr,
           username: usernameStr,
+          isPaid: false, // Explicitly set to false (cannot be set by client)
         },
         select: {
           id: true,

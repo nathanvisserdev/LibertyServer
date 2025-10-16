@@ -57,6 +57,7 @@ model Users {
 
   // privacy & account state
   isPrivateUser Boolean   @default(true)
+  isPaid        Boolean   @default(false)
   isBanned      Boolean   @default(false)
 
   // content
@@ -79,6 +80,8 @@ model Users {
 
   // groups this user administers
   adminGroups Groups[] @relation("GroupAdmin")
+
+  @@index([isPaid])
 }
 
 model Groups {
@@ -89,6 +92,7 @@ model Groups {
 
   // visibility & admin
   groupType GroupType @default(PRIVATE)
+  isHidden  Boolean   @default(false)
   adminId   String
   admin     Users     @relation("GroupAdmin", fields: [adminId], references: [id])
 

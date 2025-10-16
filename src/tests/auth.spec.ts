@@ -27,6 +27,7 @@ describe("auth endpoints", () => {
     expect(res.body).toHaveProperty("createdAt");
     expect(res.body).toHaveProperty("isPrivateUser");
     expect(res.body).not.toHaveProperty("password");
+    expect(res.body).not.toHaveProperty("isPaid"); // Should never be in response
   });
 
   it("signup: 400 bad request when missing required fields", async () => {
@@ -66,6 +67,42 @@ describe("auth endpoints", () => {
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
     expect(res.body.error).toContain("Username must be 3-32 characters");
+  });
+
+  it("signup: 400 bad request when isPaid field is present", async () => {
+    const d = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${Math.floor(Math.random()*1000)}`;
+    
+    // Test with isPaid: true
+    const res1 = await request(app)
+      .post("/signup")
+      .send({ 
+        email: `test${ts}@example.com`, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username: `test${ts}`,
+        isPaid: true // This should be rejected
+      });
+    expect(res1.status).toBe(400);
+    expect(res1.body).toHaveProperty("error");
+    expect(res1.body.error).toContain("isPaid field is not allowed");
+
+    // Test with isPaid: false (should also be rejected)
+    const res2 = await request(app)
+      .post("/signup")
+      .send({ 
+        email: `test${ts}b@example.com`, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username: `test${ts}b`,
+        isPaid: false // This should also be rejected
+      });
+    expect(res2.status).toBe(400);
+    expect(res2.body).toHaveProperty("error");
+    expect(res2.body.error).toContain("isPaid field is not allowed");
   });
 
   it("signup: 409 conflictwhen email already exists", async () => {
