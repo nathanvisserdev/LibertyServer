@@ -292,4 +292,195 @@ describe("groups endpoints", () => {
       expect(res.body).toHaveProperty("isHidden", false);
     });
   });
+
+  describe("GET /groups", () => {
+    it("returns visible groups for unpaid user", async () => {
+      const { token } = await createUserAndGetToken(false);
+      
+      // Create a public group
+      await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          name: `Public Group ${Date.now()}`, 
+          groupType: "PUBLIC"
+        });
+
+      const res = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      
+      // Should include the public group and user's personal "Social Circle"
+      const publicGroups = res.body.filter((g: any) => g.groupType === "PUBLIC");
+      const personalGroups = res.body.filter((g: any) => g.groupType === "PERSONAL");
+      
+      expect(publicGroups.length).toBeGreaterThan(0);
+      expect(personalGroups.length).toBeGreaterThan(0); // User's own Social Circle
+    });
+
+    it("filters out hidden groups for non-members", async () => {
+      const { token: paidToken } = await createUserAndGetToken(true); // Paid user to create hidden group
+      const { token: unpaidToken } = await createUserAndGetToken(false); // Unpaid user to test filtering
+
+      // Create a hidden group with paid user
+      const hiddenGroupRes = await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${paidToken}`)
+        .send({ 
+          name: `Hidden Group ${Date.now()}`, 
+          groupType: "PRIVATE",
+          isHidden: true
+        });
+      
+      expect(hiddenGroupRes.status).toBe(201);
+
+      // Unpaid user should not see the hidden group
+      const res = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${unpaidToken}`);
+      
+      expect(res.status).toBe(200);
+      
+      const hiddenGroups = res.body.filter((g: any) => g.isHidden === true);
+      expect(hiddenGroups.length).toBe(0); // Should not see any hidden groups
+    });
+
+    it("shows hidden groups to their admins", async () => {
+      const { token } = await createUserAndGetToken(true); // Paid user
+
+      // Create a hidden group
+      const hiddenGroupRes = await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          name: `Admin Hidden Group ${Date.now()}`, 
+          groupType: "PRIVATE",
+          isHidden: true
+        });
+      
+      expect(hiddenGroupRes.status).toBe(201);
+      const groupId = hiddenGroupRes.body.id;
+
+      // Admin should see their own hidden group
+      const res = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      
+      const foundHiddenGroup = res.body.find((g: any) => g.id === groupId);
+      expect(foundHiddenGroup).toBeDefined();
+      expect(foundHiddenGroup.isHidden).toBe(true);
+    });
+
+    it("shows hidden groups to their members", async () => {
+      const { token: adminToken } = await createUserAndGetToken(true); // Paid admin
+      const { token: memberToken, userId: memberId } = await createUserAndGetToken(false); // Member
+
+      // Create a hidden group with admin
+      const hiddenGroupRes = await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ 
+          name: `Member Hidden Group ${Date.now()}`, 
+          groupType: "PRIVATE",
+          isHidden: true
+        });
+      
+      expect(hiddenGroupRes.status).toBe(201);
+      const groupId = hiddenGroupRes.body.id;
+
+      // Add member to the hidden group (simulating joining)
+      await prisma.groupRoster.create({
+        data: {
+          userId: memberId,
+          groupId: groupId
+        }
+      });
+
+      // Member should see the hidden group they belong to
+      const res = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${memberToken}`);
+      
+      expect(res.status).toBe(200);
+      
+      const foundHiddenGroup = res.body.find((g: any) => g.id === groupId);
+      expect(foundHiddenGroup).toBeDefined();
+      expect(foundHiddenGroup.isHidden).toBe(true);
+    });
+
+    it("filters out other users' PERSONAL groups", async () => {
+      const { token: token1 } = await createUserAndGetToken(false);
+      const { token: token2 } = await createUserAndGetToken(false);
+
+      // Get groups for first user
+      const res1 = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${token1}`);
+      
+      // Get groups for second user  
+      const res2 = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${token2}`);
+      
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+
+      const personalGroups1 = res1.body.filter((g: any) => g.groupType === "PERSONAL");
+      const personalGroups2 = res2.body.filter((g: any) => g.groupType === "PERSONAL");
+
+      // Each user should only see their own personal group
+      expect(personalGroups1.length).toBe(1);
+      expect(personalGroups2.length).toBe(1);
+      
+      // The personal groups should be different
+      expect(personalGroups1[0].id).not.toBe(personalGroups2[0].id);
+    });
+
+    it("includes proper displayLabel for different group types", async () => {
+      const { token } = await createUserAndGetToken(false);
+      
+      // Create different types of groups
+      await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          name: "Test Public", 
+          groupType: "PUBLIC"
+        });
+
+      await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          name: "Test Private", 
+          groupType: "PRIVATE"
+        });
+
+      const res = await request(app)
+        .get("/groups")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      
+      const publicGroup = res.body.find((g: any) => g.name === "Test Public");
+      const privateGroup = res.body.find((g: any) => g.name === "Test Private");
+      const personalGroup = res.body.find((g: any) => g.groupType === "PERSONAL");
+
+      expect(publicGroup.displayLabel).toBe("Test Public public assembly room");
+      expect(privateGroup.displayLabel).toBe("Test Private private assembly room");
+      expect(personalGroup.displayLabel).toBe("Social Circle");
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app)
+        .get("/groups");
+      
+      expect(res.status).toBe(401);
+    });
+  });
 });

@@ -71,15 +71,54 @@ router.post("/groups", auth, async (req, res) => {
 });
 
 // --- List Groups ---
-router.get("/groups", auth, async (_req, res) => {
-  const groups = await prisma.groups.findMany({ include: { admin: true } });
+router.get("/groups", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+
+  // Get all groups with admin and membership information
+  const groups = await prisma.groups.findMany({ 
+    include: { 
+      admin: true,
+      members: {
+        where: { userId: userId },
+        select: { userId: true }
+      }
+    } 
+  });
+
+  // Filter groups based on visibility rules
+  const filteredGroups = groups.filter(g => {
+    // Filter out PERSONAL groups where the requester is not the admin
+    if (g.groupType === "PERSONAL" && g.adminId !== userId) {
+      return false;
+    }
+
+    // Filter out hidden groups unless the requester is admin or member
+    if (g.isHidden) {
+      const isAdmin = g.adminId === userId;
+      const isMember = g.members.length > 0; // User is a member if found in members array
+      
+      if (!isAdmin && !isMember) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Apply displayLabel logic and remove members array from response
   res.json(
-    groups.map(g => {
+    filteredGroups.map(g => {
+      const { members, ...groupWithoutMembers } = g;
+      
       if (g.groupType === "PUBLIC")
-        return { ...g, displayLabel: `${g.name} public assembly room` };
+        return { ...groupWithoutMembers, displayLabel: `${g.name} public assembly room` };
       if (g.groupType === "PRIVATE")
-        return { ...g, displayLabel: `${g.name} private assembly room` };
-      return { ...g, displayLabel: "Social Circle" };
+        return { ...groupWithoutMembers, displayLabel: `${g.name} private assembly room` };
+      return { ...groupWithoutMembers, displayLabel: "Social Circle" };
     })
   );
 });
