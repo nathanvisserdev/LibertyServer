@@ -9,6 +9,7 @@ import postsRouter from "./posts.js";
 import groupsRouter from "./groups.js";
 import miscRouter from "./misc.js";
 import usersRouter from "./users.js";
+import searchRouter from "./search.js";
 
 const app = express();
 app.use(express.json());
@@ -23,6 +24,7 @@ app.use(usersRouter);
 app.use(blocksRouter);
 app.use(postsRouter);
 app.use(groupsRouter);
+app.use(searchRouter);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(process.env.PORT || 3000, () =>
