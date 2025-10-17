@@ -25,7 +25,7 @@ describe("auth endpoints", () => {
     expect(res.body).toHaveProperty("firstName", "Test");
     expect(res.body).toHaveProperty("lastName", "User");
     expect(res.body).toHaveProperty("createdAt");
-    expect(res.body).toHaveProperty("isPrivateUser");
+    expect(res.body).toHaveProperty("isPrivate");
     expect(res.body).not.toHaveProperty("password");
     expect(res.body).not.toHaveProperty("isPaid"); // Should never be in response
   });

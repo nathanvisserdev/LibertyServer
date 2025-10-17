@@ -106,7 +106,7 @@ router.patch("/users/:id", auth, async (req, res) => {
         photo: true,
         about: true,
         createdAt: true,
-        isPrivateUser: true,
+        isPrivate: true,
         // Exclude password, phoneNumber, zipCode, isBanned and other sensitive fields
       },
     });

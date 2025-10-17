@@ -78,7 +78,7 @@ router.post("/signup", async (req, res) => {
           firstName: true,
           lastName: true,
           createdAt: true,
-          isPrivateUser: true,
+          isPrivate: true,
         },
       });
 
