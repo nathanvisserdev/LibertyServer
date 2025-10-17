@@ -81,7 +81,7 @@ router.get("/feed", auth, async (req, res) => {
       select: { requesterId: true, requestedId: true, type: true },
     }),
     prisma.connections.findMany({
-      where: { type: "FOLLOW", requesterId: me },
+      where: { type: "IS_FOLLOWING", requesterId: me },
       select: { requestedId: true },
     }),
   ]);

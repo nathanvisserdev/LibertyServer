@@ -36,7 +36,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 }
 
 // Helper function to create a connection between two users
-async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "FOLLOW") {
+async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING") {
   await prisma.connections.create({
     data: {
       requesterId,
@@ -206,7 +206,7 @@ describe("profile endpoints", () => {
       });
 
       // Session user follows target user
-      await createConnection(sessionUserId, targetUserId, "FOLLOW");
+      await createConnection(sessionUserId, targetUserId, "IS_FOLLOWING");
 
       const res = await request(app)
         .get(`/users/${targetUserId}`)
@@ -278,7 +278,7 @@ describe("profile endpoints", () => {
       });
 
       // Target user follows session user (reverse connection)
-      await createConnection(targetUserId, sessionUserId, "FOLLOW");
+      await createConnection(targetUserId, sessionUserId, "IS_FOLLOWING");
 
       const res = await request(app)
         .get(`/users/${targetUserId}`)

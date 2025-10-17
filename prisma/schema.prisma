@@ -18,7 +18,7 @@ enum RequestStatus {
 enum ConnectionType {
   ACQUAINTANCE
   STRANGER
-  FOLLOW
+  IS_FOLLOWING
 }
 
 enum GroupType {

@@ -65,12 +65,12 @@ router.get("/users/:id", auth, async (req, res) => {
           { 
             requesterId: sessionUserId, 
             requestedId: targetUserId,
-            type: { in: ["ACQUAINTANCE", "STRANGER", "FOLLOW"] }
+            type: { in: ["ACQUAINTANCE", "STRANGER", "IS_FOLLOWING"] }
           },
           { 
             requesterId: targetUserId, 
             requestedId: sessionUserId,
-            type: { in: ["ACQUAINTANCE", "STRANGER", "FOLLOW"] }
+            type: { in: ["ACQUAINTANCE", "STRANGER", "IS_FOLLOWING"] }
           },
         ],
       },
