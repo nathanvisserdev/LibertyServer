@@ -405,4 +405,253 @@ describe("user endpoints", () => {
       expect(res.status).toBe(204);
     });
   });
+
+  describe("PATCH /users/:id/settings/security", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const res = await request(app)
+        .patch("/users/some-id/settings/security")
+        .send({ currentPassword: "test", email: "test@example.com" });
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 400 bad request when user ID is missing", async () => {
+      const { token } = await createUserAndGetToken();
+      const res = await request(app)
+        .patch("/users//settings/security")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ currentPassword: "test" });
+      expect(res.status).toBe(404); // Express returns 404 for malformed routes
+    });
+
+    it("returns 403 forbidden when trying to update another user's security settings", async () => {
+      const { token } = await createUserAndGetToken();
+      const { userId: otherUserId } = await createUserAndGetToken();
+      
+      const res = await request(app)
+        .patch(`/users/${otherUserId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ currentPassword: "testpass123", email: "new@example.com" });
+      
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("Forbidden: Can only update your own security settings");
+    });
+
+    it("returns 400 bad request when currentPassword is missing", async () => {
+      const { userId, token } = await createUserAndGetToken();
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ email: "new@example.com" });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("currentPassword is required");
+    });
+
+    it("returns 400 bad request when no valid fields are provided", async () => {
+      const { userId, token } = await createUserAndGetToken();
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ currentPassword: "testpass123" });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("No valid fields to update");
+    });
+
+    it("returns 401 unauthorized when currentPassword is incorrect", async () => {
+      const { userId, token } = await createUserAndGetToken();
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: "wrongpassword", 
+          email: "new@example.com" 
+        });
+      
+      expect(res.status).toBe(401);
+      expect(res.text).toBe("Invalid current password");
+    });
+
+    it("successfully updates email with correct currentPassword", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      const newEmail = `updated-${Date.now()}@example.com`;
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          email: newEmail 
+        });
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("id", userId);
+      expect(res.body).toHaveProperty("email", newEmail);
+      expect(res.body).toHaveProperty("isPrivate");
+      expect(res.body).toHaveProperty("updatedAt");
+      expect(res.body).not.toHaveProperty("password");
+    });
+
+    it("successfully updates password with correct currentPassword", async () => {
+      const password = "testpass123";
+      const { userId, token, email } = await createUserAndGetToken(undefined, password);
+      const newPassword = "newpassword123";
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          password: newPassword 
+        });
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("id", userId);
+      expect(res.body).toHaveProperty("email", email);
+      expect(res.body).toHaveProperty("isPrivate");
+      expect(res.body).toHaveProperty("updatedAt");
+      expect(res.body).not.toHaveProperty("password");
+      
+      // Verify new password works for login
+      const loginRes = await request(app)
+        .post("/login")
+        .send({ email, password: newPassword });
+      
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body).toHaveProperty("accessToken");
+    });
+
+    it("successfully updates isPrivate with correct currentPassword", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          isPrivate: false 
+        });
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("id", userId);
+      expect(res.body).toHaveProperty("isPrivate", false);
+      expect(res.body).toHaveProperty("updatedAt");
+    });
+
+    it("successfully updates multiple fields at once", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      const newEmail = `multi-update-${Date.now()}@example.com`;
+      const newPassword = "newpassword456";
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password,
+          email: newEmail,
+          password: newPassword,
+          isPrivate: false
+        });
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("id", userId);
+      expect(res.body).toHaveProperty("email", newEmail);
+      expect(res.body).toHaveProperty("isPrivate", false);
+      expect(res.body).toHaveProperty("updatedAt");
+      expect(res.body).not.toHaveProperty("password");
+      
+      // Verify new credentials work for login
+      const loginRes = await request(app)
+        .post("/login")
+        .send({ email: newEmail, password: newPassword });
+      
+      expect(loginRes.status).toBe(200);
+    });
+
+    it("returns 400 bad request for invalid email format", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          email: "invalid-email" 
+        });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Invalid email format");
+    });
+
+    it("returns 400 bad request for password too short", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          password: "short" 
+        });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Password must be at least 8 characters long");
+    });
+
+    it("returns 400 bad request for non-boolean isPrivate", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          isPrivate: "not-a-boolean" 
+        });
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Invalid isPrivate: must be a boolean");
+    });
+
+    it("returns 409 conflict when email already exists", async () => {
+      const password = "testpass123";
+      const { userId: userId1, token: token1 } = await createUserAndGetToken(undefined, password);
+      const { email: existingEmail } = await createUserAndGetToken();
+      
+      const res = await request(app)
+        .patch(`/users/${userId1}/settings/security`)
+        .set("Authorization", `Bearer ${token1}`)
+        .send({ 
+          currentPassword: password, 
+          email: existingEmail 
+        });
+      
+      expect(res.status).toBe(409);
+      expect(res.body).toHaveProperty("error", "Email already exists");
+    });
+
+    it("lowercases and trims email before saving", async () => {
+      const password = "testpass123";
+      const { userId, token } = await createUserAndGetToken(undefined, password);
+      const emailWithSpaces = `  UPPERCASE-${Date.now()}@EXAMPLE.COM  `;
+      const expectedEmail = emailWithSpaces.toLowerCase().trim();
+      
+      const res = await request(app)
+        .patch(`/users/${userId}/settings/security`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          currentPassword: password, 
+          email: emailWithSpaces 
+        });
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("email", expectedEmail);
+    });
+  });
 });

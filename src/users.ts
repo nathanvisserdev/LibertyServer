@@ -125,6 +125,121 @@ router.patch("/users/:id", auth, async (req, res) => {
   }
 });
 
+// --- Update user security settings (email, password, isPrivate) ---
+router.patch("/users/:id/settings/security", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = (req.user as any).id;
+  const targetId = req.params.id;
+
+  if (!targetId) {
+    return res.status(400).send("Missing user ID");
+  }
+
+  // Only allow users to update their own security settings
+  if (me !== targetId) {
+    return res.status(403).send("Forbidden: Can only update your own security settings");
+  }
+
+  const { currentPassword, email, password, isPrivate } = req.body ?? {};
+
+  // Current password is required for any security update
+  if (!currentPassword || typeof currentPassword !== "string") {
+    return res.status(400).send("currentPassword is required");
+  }
+
+  // Check if at least one valid field is provided
+  if (email === undefined && password === undefined && isPrivate === undefined) {
+    return res.status(400).send("No valid fields to update");
+  }
+
+  try {
+    // Look up the user
+    const user = await prisma.users.findUnique({ where: { id: targetId } });
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    // Check if user is hidden or banned
+    if (user.isHidden) {
+      return res.status(404).send("User not found");
+    }
+    if (user.isBanned) {
+      return res.status(403).send("Account banned");
+    }
+
+    // Verify current password
+    const passwordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!passwordValid) {
+      return res.status(401).send("Invalid current password");
+    }
+
+    // Prepare update data
+    const updateData: any = {};
+
+    // Handle email update
+    if (email !== undefined) {
+      if (typeof email !== "string") {
+        return res.status(400).send("Invalid email: must be a string");
+      }
+      const emailStr = email.toLowerCase().trim();
+      if (!emailStr.includes("@") || emailStr.length < 3) {
+        return res.status(400).send("Invalid email format");
+      }
+      updateData.email = emailStr;
+    }
+
+    // Handle password update
+    if (password !== undefined) {
+      if (typeof password !== "string") {
+        return res.status(400).send("Invalid password: must be a string");
+      }
+      if (password.length < 8) {
+        return res.status(400).send("Password must be at least 8 characters long");
+      }
+      const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
+      updateData.password = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    }
+
+    // Handle isPrivate update
+    if (isPrivate !== undefined) {
+      if (typeof isPrivate !== "boolean") {
+        return res.status(400).send("Invalid isPrivate: must be a boolean");
+      }
+      updateData.isPrivate = isPrivate;
+    }
+
+    // Update the user
+    const updatedUser = await prisma.users.update({
+      where: { id: targetId },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        isPrivate: true,
+        updatedAt: true,
+      },
+    });
+
+    return res.status(200).json(updatedUser);
+  } catch (e) {
+    console.error(e);
+    if (e instanceof Error && "code" in e && e.code === "P2002") {
+      // Unique constraint violation
+      const meta = (e as any).meta;
+      if (meta?.target?.includes("email")) {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+    }
+    if (e instanceof Error) {
+      res.status(400).json({ error: e.message });
+    } else {
+      res.status(400).json({ error: String(e) });
+    }
+  }
+});
+
 // --- Delete user (requires password confirmation and cleanup) ---
 router.delete("/user/me", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
