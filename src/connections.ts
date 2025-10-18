@@ -190,4 +190,59 @@ router.get("/connections/pending/incoming", auth, async (req, res) => {
   }
 });
 
+// --- GET /connections/pending/outgoing ---
+router.get("/connections/pending/outgoing", auth, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = req.user.id;
+
+  try {
+    const outgoingRequests: any[] = [];
+
+    // Fetch all PENDING connection requests where session user is the requester
+    const pendingRequests = await prisma.connectionRequest.findMany({
+      where: {
+        requesterId: sessionUserId,
+        status: "PENDING"
+      },
+      include: {
+        requested: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            photo: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Add all matching requests to outgoingRequests array
+    for (const request of pendingRequests) {
+      if (request.requesterId === sessionUserId && request.status === "PENDING") {
+        outgoingRequests.push({
+          id: request.id,
+          requesterId: request.requesterId,
+          requestedId: request.requestedId,
+          type: request.type,
+          status: request.status,
+          createdAt: request.createdAt,
+          requested: request.requested
+        });
+      }
+    }
+
+    return res.status(200).json({ outgoingRequests });
+
+  } catch (error) {
+    console.error("Get pending connections error:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
 export default router;
