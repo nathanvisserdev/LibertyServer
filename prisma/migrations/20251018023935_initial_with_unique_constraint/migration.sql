@@ -123,6 +123,9 @@ CREATE UNIQUE INDEX "GroupRoster_userId_groupId_key" ON "GroupRoster"("userId", 
 CREATE INDEX "ConnectionRequest_requesterId_requestedId_type_status_idx" ON "ConnectionRequest"("requesterId", "requestedId", "type", "status");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ConnectionRequest_requesterId_requestedId_key" ON "ConnectionRequest"("requesterId", "requestedId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Connections_requesterId_requestedId_type_key" ON "Connections"("requesterId", "requestedId", "type");
 
 -- CreateIndex

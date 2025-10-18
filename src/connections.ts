@@ -96,37 +96,27 @@ router.post("/connections/request", auth, async (req, res) => {
       return res.status(500).send("Internal server error");
     }
 
-    // Create or update the pending connection-request row
-    // First check if a pending request already exists
-    const existingRequest = await prisma.connectionRequest.findFirst({
+    // Create or update the pending connection-request row using unique constraint
+    const connectionRequest = await prisma.connectionRequest.upsert({
       where: {
+        requesterId_requestedId: {
+          requesterId: requesterId,
+          requestedId: requestedId
+        }
+      },
+      update: {
+        type: requestType as "ACQUAINTANCE" | "STRANGER" | "FOLLOW",
+        status: "PENDING",
+        createdAt: new Date(),
+        decidedAt: null
+      },
+      create: {
         requesterId: requesterId,
         requestedId: requestedId,
+        type: requestType as "ACQUAINTANCE" | "STRANGER" | "FOLLOW",
         status: "PENDING"
       }
     });
-
-    let connectionRequest;
-    if (existingRequest) {
-      // Update existing request
-      connectionRequest = await prisma.connectionRequest.update({
-        where: { id: existingRequest.id },
-        data: {
-          type: requestType as "ACQUAINTANCE" | "STRANGER" | "FOLLOW",
-          createdAt: new Date()
-        }
-      });
-    } else {
-      // Create new request
-      connectionRequest = await prisma.connectionRequest.create({
-        data: {
-          requesterId: requesterId,
-          requestedId: requestedId,
-          type: requestType as "ACQUAINTANCE" | "STRANGER" | "FOLLOW",
-          status: "PENDING"
-        }
-      });
-    }
 
     return res.status(201).json({
       requesterId: connectionRequest.requesterId,

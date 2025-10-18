@@ -155,6 +155,7 @@ model ConnectionRequest {
   requester Users @relation("req_outgoing", fields: [requesterId], references: [id])
   requested Users @relation("req_incoming", fields: [requestedId], references: [id])
 
+  @@unique([requesterId, requestedId])
   @@index([requesterId, requestedId, type, status])
 }
 
