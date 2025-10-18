@@ -17,8 +17,8 @@ router.post("/connections/request", auth, async (req, res) => {
   if (!requestedId || typeof requestedId !== "string") {
     return res.status(400).send("Invalid requestedId");
   }
-  if (!requestType || !["ACQUAINTANCE", "STRANGER"].includes(requestType)) {
-    return res.status(400).send("Invalid requestType: must be ACQUAINTANCE or STRANGER");
+  if (!requestType || !["ACQUAINTANCE", "STRANGER", "FOLLOW"].includes(requestType)) {
+    return res.status(400).send("Invalid requestType: must be ACQUAINTANCE, STRANGER, or FOLLOW");
   }
   if (requesterId === requestedId) {
     return res.status(400).send("Cannot create connection request to yourself");
@@ -70,9 +70,12 @@ router.post("/connections/request", auth, async (req, res) => {
     if (isBlocked || isHidden || isBanned) {
       return res.status(404).send("User not found");
     } else if (existingConnection && existingConnection.type === "ACQUAINTANCE") {
-      return res.status(409).json({
-        error: "The request can't proceed because the relationship already exists in that state."
-      });
+      if (requestType === "ACQUAINTANCE") {
+        return res.status(409).json({
+          error: "The request can't proceed because the relationship already exists in that state."
+        });
+      }
+      // Allow FOLLOW and STRANGER requests for existing ACQUAINTANCE connections
     } else if (existingConnection && existingConnection.type === "STRANGER") {
       // Allow only incoming requestType === "ACQUAINTANCE" and reject any other
       if (requestType !== "ACQUAINTANCE") {
@@ -109,7 +112,7 @@ router.post("/connections/request", auth, async (req, res) => {
       connectionRequest = await prisma.connectionRequest.update({
         where: { id: existingRequest.id },
         data: {
-          type: requestType as "ACQUAINTANCE" | "STRANGER",
+          type: requestType as "ACQUAINTANCE" | "STRANGER" | "FOLLOW",
           createdAt: new Date()
         }
       });
@@ -119,7 +122,7 @@ router.post("/connections/request", auth, async (req, res) => {
         data: {
           requesterId: requesterId,
           requestedId: requestedId,
-          type: requestType as "ACQUAINTANCE" | "STRANGER",
+          type: requestType as "ACQUAINTANCE" | "STRANGER" | "FOLLOW",
           status: "PENDING"
         }
       });

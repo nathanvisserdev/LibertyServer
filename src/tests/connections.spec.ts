@@ -130,7 +130,7 @@ describe("connections endpoints", () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.text).toContain("Invalid requestType: must be ACQUAINTANCE or STRANGER");
+      expect(res.text).toContain("Invalid requestType: must be ACQUAINTANCE, STRANGER, or FOLLOW");
     });
 
     it("returns 400 bad request when trying to connect to yourself", async () => {
@@ -508,6 +508,110 @@ describe("connections endpoints", () => {
         }
       });
       expect(allRequests).toHaveLength(1);
+    });
+
+    it("successfully creates FOLLOW request when not connected", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+      
+      const token = getAuthToken(requester.id, requester.email);
+
+      const res = await request(app)
+        .post("/connections/request")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          requestedId: requested.id,
+          requestType: "FOLLOW" 
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty("requesterId", requester.id);
+      expect(res.body).toHaveProperty("requestedId", requested.id);
+      expect(res.body).toHaveProperty("requestType", "FOLLOW");
+
+      // Verify the connection request was created in the database
+      const connectionRequest = await prisma.connectionRequest.findFirst({
+        where: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "FOLLOW",
+          status: "PENDING"
+        }
+      });
+      expect(connectionRequest).toBeTruthy();
+    });
+
+    it("rejects FOLLOW request when STRANGER connection exists", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+      
+      // Create existing STRANGER connection
+      await createConnection(requester.id, requested.id, "STRANGER");
+      
+      const token = getAuthToken(requester.id, requester.email);
+
+      const res = await request(app)
+        .post("/connections/request")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          requestedId: requested.id,
+          requestType: "FOLLOW" 
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe("Invalid request type for existing relationship");
+    });
+
+    it("rejects FOLLOW request when IS_FOLLOWING connection exists", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+      
+      // Create existing IS_FOLLOWING connection
+      await createConnection(requester.id, requested.id, "IS_FOLLOWING");
+      
+      const token = getAuthToken(requester.id, requester.email);
+
+      const res = await request(app)
+        .post("/connections/request")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          requestedId: requested.id,
+          requestType: "FOLLOW" 
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe("Invalid request type for existing relationship");
+    });
+
+    it("allows FOLLOW request when ACQUAINTANCE connection exists", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+      
+      // Create existing ACQUAINTANCE connection
+      await createConnection(requester.id, requested.id, "ACQUAINTANCE");
+      
+      const token = getAuthToken(requester.id, requester.email);
+
+      const res = await request(app)
+        .post("/connections/request")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          requestedId: requested.id,
+          requestType: "FOLLOW" 
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty("requesterId", requester.id);
+      expect(res.body).toHaveProperty("requestedId", requested.id);
+      expect(res.body).toHaveProperty("requestType", "FOLLOW");
     });
   });
 });

@@ -15,6 +15,12 @@ enum RequestStatus {
   CANCELED
 }
 
+enum RequestType {
+  ACQUAINTANCE
+  STRANGER
+  FOLLOW
+}
+
 enum ConnectionType {
   ACQUAINTANCE
   STRANGER
@@ -138,10 +144,10 @@ model GroupRoster {
 }
 
 model ConnectionRequest {
-  id          String         @id @default(cuid())
+  id          String      @id @default(cuid())
   requesterId String
   requestedId String
-  type        ConnectionType
+  type        RequestType
   status      RequestStatus  @default(PENDING)
   createdAt   DateTime       @default(now())
   decidedAt   DateTime?
