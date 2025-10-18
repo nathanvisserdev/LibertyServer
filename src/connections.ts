@@ -61,7 +61,7 @@ router.post("/connections/request", auth, async (req, res) => {
       }
     });
 
-    // Define booleans exactly as specified
+    // Define booleans for 404 response types
     const isBlocked = blockExists !== null;
     const isHidden = requester.isHidden || requested.isHidden;
     const isBanned = requester.isBanned || requested.isBanned;

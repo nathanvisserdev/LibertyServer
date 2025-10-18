@@ -4,6 +4,7 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
@@ -13,11 +14,9 @@ const prisma = new PrismaClient();
 
 // Helper function to create a user and get token
 async function createUserAndGetToken(email?: string, password?: string) {
-  const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
-  const userEmail = email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+  const userEmail = email || generateUniqueEmail('test', testNamespace);
   const userPassword = password || "testpass123";
-  const username = `u${timestamp.toString().slice(-8)}${randomId}`; // Valid username: u + last 8 digits of timestamp + random chars
+  const username = generateUniqueUsername();
   
   const signupRes = await request(app)
     .post("/signup")
@@ -232,12 +231,14 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("ignores forbidden fields like email and password", async () => {
       const { userId, token, email } = await createUserAndGetToken();
+      const uniqueEmail = generateUniqueEmail('newemail');
+      
       const res = await request(app)
         .patch(`/users/${userId}`)
         .set("Authorization", `Bearer ${token}`)
         .send({
           firstName: "John",
-          email: "newemail@example.com",
+          email: uniqueEmail,
           password: "newpassword",
           isBanned: true,
         });
@@ -297,7 +298,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
     });
 
     it("returns 401 unauthorizedwhen password is incorrect", async () => {
-      const { token } = await createUserAndGetToken("user@test.com", "correctpass");
+      const { token } = await createUserAndGetToken();
       
       const res = await request(app)
         .delete("/user/me")
@@ -310,7 +311,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("successfully deletes user with correct password", async () => {
       const password = "testpass123";
-      const email = `delete-test-${Date.now()}@example.com`;
+      const email = generateUniqueEmail('delete-test');
       const { userId, token } = await createUserAndGetToken(email, password);
       
       const res = await request(app)
@@ -331,7 +332,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("returns 409 conflict when user administers non-PERSONAL groups without force", async () => {
       const password = "testpass123";
-      const { token } = await createUserAndGetToken("admin@test.com", password);
+      const { token } = await createUserAndGetToken(undefined, password);
       
       // Create a non-PERSONAL group (this would need to be done via API or direct DB insert)
       // For this test, we'll simulate the scenario by expecting the 409 if groups exist
@@ -349,7 +350,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("successfully deletes user with non-PERSONAL groups when force=true", async () => {
       const password = "testpass123";
-      const { token } = await createUserAndGetToken("admin@test.com", password);
+      const { token } = await createUserAndGetToken(undefined, password);
       
       const res = await request(app)
         .delete("/user/me?force=true")
@@ -361,7 +362,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("handles case-insensitive force parameter", async () => {
       const password = "testpass123";
-      const { token } = await createUserAndGetToken("admin@test.com", password);
+      const { token } = await createUserAndGetToken(undefined, password);
       
       const res = await request(app)
         .delete("/user/me?force=TRUE")
@@ -373,7 +374,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("deletes user even without force when only PERSONAL groups exist", async () => {
       const password = "testpass123";
-      const email = `personal-test-${Date.now()}@example.com`;
+      const email = generateUniqueEmail('personal-test');
       const { token } = await createUserAndGetToken(email, password);
       
       // Users are created with a PERSONAL "Social Circle" group by default
@@ -388,7 +389,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("cleans up user data properly", async () => {
       const password = "testpass123";
-      const { userId, token, email } = await createUserAndGetToken("cleanup@test.com", password);
+      const { userId, token, email } = await createUserAndGetToken(undefined, password);
       
       // Delete the user
       const deleteRes = await request(app)
@@ -416,7 +417,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("returns specific error message for group admin conflict", async () => {
       const password = "testpass123";
-      const { token } = await createUserAndGetToken("admin@test.com", password);
+      const { token } = await createUserAndGetToken(undefined, password);
       
       // Users with only PERSONAL groups should be able to delete without conflict
       // PERSONAL groups are excluded from the admin conflict check
@@ -432,9 +433,11 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
   describe("PATCH /users/:id/settings/security", () => {
     it("returns 401 unauthorized without authentication token", async () => {
+      const uniqueEmail = generateUniqueEmail('test');
+      
       const res = await request(app)
         .patch("/users/some-id/settings/security")
-        .send({ currentPassword: "test", email: "test@example.com" });
+        .send({ currentPassword: "test", email: uniqueEmail });
       expect(res.status).toBe(401);
     });
 
@@ -451,10 +454,12 @@ async function createUserAndGetToken(email?: string, password?: string) {
       const { token } = await createUserAndGetToken();
       const { userId: otherUserId } = await createUserAndGetToken();
       
+      const uniqueEmail = generateUniqueEmail('new');
+      
       const res = await request(app)
         .patch(`/users/${otherUserId}/settings/security`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ currentPassword: "testpass123", email: "new@example.com" });
+        .send({ currentPassword: "testpass123", email: uniqueEmail });
       
       expect(res.status).toBe(403);
       expect(res.text).toBe("Forbidden: Can only update your own security settings");
@@ -462,10 +467,12 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("returns 400 bad request when currentPassword is missing", async () => {
       const { userId, token } = await createUserAndGetToken();
+      const uniqueEmail = generateUniqueEmail('new');
+      
       const res = await request(app)
         .patch(`/users/${userId}/settings/security`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ email: "new@example.com" });
+        .send({ email: uniqueEmail });
       
       expect(res.status).toBe(400);
       expect(res.text).toBe("currentPassword is required");
@@ -484,12 +491,14 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("returns 401 unauthorized when currentPassword is incorrect", async () => {
       const { userId, token } = await createUserAndGetToken();
+      const uniqueEmail = generateUniqueEmail('new');
+      
       const res = await request(app)
         .patch(`/users/${userId}/settings/security`)
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           currentPassword: "wrongpassword", 
-          email: "new@example.com" 
+          email: uniqueEmail 
         });
       
       expect(res.status).toBe(401);
@@ -499,7 +508,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
     it("successfully updates email with correct currentPassword", async () => {
       const password = "testpass123";
       const { userId, token } = await createUserAndGetToken(undefined, password);
-      const newEmail = `updated-${Date.now()}@example.com`;
+      const newEmail = generateUniqueEmail('updated');
       
       const res = await request(app)
         .patch(`/users/${userId}/settings/security`)
@@ -567,7 +576,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
     it("successfully updates multiple fields at once", async () => {
       const password = "testpass123";
       const { userId, token } = await createUserAndGetToken(undefined, password);
-      const newEmail = `multi-update-${Date.now()}@example.com`;
+      const newEmail = generateUniqueEmail('multi-update');
       const newPassword = "newpassword456";
       
       const res = await request(app)
@@ -645,15 +654,21 @@ async function createUserAndGetToken(email?: string, password?: string) {
 
     it("returns 409 conflict when email already exists", async () => {
       const password = "testpass123";
-      const { userId: userId1, token: token1 } = await createUserAndGetToken(undefined, password);
-      const { email: existingEmail } = await createUserAndGetToken();
       
+      // Create first user with unique email
+      const { userId: userId1, token: token1 } = await createUserAndGetToken(undefined, password);
+      
+      // Create second user with a different unique email 
+      const conflictEmail = generateUniqueEmail('conflict-test');
+      const { userId: userId2 } = await createUserAndGetToken(conflictEmail);
+      
+      // Try to update first user to use second user's email (should fail)
       const res = await request(app)
         .patch(`/users/${userId1}/settings/security`)
         .set("Authorization", `Bearer ${token1}`)
         .send({ 
           currentPassword: password, 
-          email: existingEmail 
+          email: conflictEmail // This email already exists in the database
         });
       
       expect(res.status).toBe(409);
@@ -663,7 +678,8 @@ async function createUserAndGetToken(email?: string, password?: string) {
     it("lowercases and trims email before saving", async () => {
       const password = "testpass123";
       const { userId, token } = await createUserAndGetToken(undefined, password);
-      const emailWithSpaces = `  UPPERCASE-${Date.now()}@EXAMPLE.COM  `;
+      const baseEmail = generateUniqueEmail('UPPERCASE').toUpperCase();
+      const emailWithSpaces = `  ${baseEmail}  `;
       const expectedEmail = emailWithSpaces.toLowerCase().trim();
       
       const res = await request(app)

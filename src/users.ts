@@ -187,6 +187,13 @@ router.patch("/users/:id/settings/security", auth, async (req, res) => {
       if (!emailStr.includes("@") || emailStr.length < 3) {
         return res.status(400).send("Invalid email format");
       }
+      
+      // Check if email is already in use by another user
+      const existing = await prisma.users.findUnique({ where: { email: emailStr } });
+      if (existing && existing.id !== targetId) {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+      
       updateData.email = emailStr;
     }
 

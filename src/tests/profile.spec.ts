@@ -4,6 +4,7 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
@@ -13,11 +14,9 @@ const prisma = new PrismaClient();
 
 // Helper function to create a user and get token
 async function createUserAndGetToken(email?: string, password?: string, username?: string) {
-  const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
-  const userEmail = email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+  const userEmail = email || generateUniqueEmail('test', testNamespace);
   const userPassword = password || "testpass123";
-  const userUsername = username || `u${timestamp.toString().slice(-8)}${randomId}`; // Valid username: u + last 8 digits of timestamp + random chars
+  const userUsername = username || generateUniqueUsername();
   
   const signupRes = await request(app)
     .post("/signup")

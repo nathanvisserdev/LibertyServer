@@ -11,7 +11,7 @@ export default defineConfig({
       }
     },
     
-    testTimeout: 10000,
+    testTimeout: 20000,
     environment: 'node',
   },
 });

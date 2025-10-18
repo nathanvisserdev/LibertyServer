@@ -4,7 +4,7 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
-import bcrypt from "bcrypt";
+import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
 import jwt from "jsonwebtoken";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,11 +22,9 @@ async function createTestUser(options: {
   isBanned?: boolean;
   isPrivate?: boolean;
 } = {}) {
-  const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 8);
-  const email = options.email || `${testNamespace}_${randomId}@example.com`;
-  const username = options.username || `u${timestamp.toString().slice(-8)}${randomId}`;
-  const password = await bcrypt.hash("testpass123", 10);
+  const email = options.email || generateUniqueEmail('test', testNamespace);
+  const username = options.username || generateUniqueUsername();
+  const password = "testpass123"; // Plain text for test database
 
   return await prisma.users.create({
     data: {

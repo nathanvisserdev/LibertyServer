@@ -4,6 +4,7 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
@@ -26,10 +27,8 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 201 created 'server successfully created new resource' and user", async () => {
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 8);
-    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
-    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
+    const email = generateUniqueEmail('test', testNamespace);
+    const username = generateUniqueUsername();
     const res = await request(app)
       .post("/signup")
       .send({ 
@@ -52,23 +51,28 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 400 bad request when missing required fields", async () => {
+    const uniqueEmail = generateUniqueEmail('test');
+    
     const res = await request(app)
       .post("/signup")
-      .send({ email: "test@example.com", password: "testpass123" });
+      .send({ email: uniqueEmail, password: "testpass123" });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
     expect(res.body.error).toContain("Missing required fields");
   });
 
   it("signup: 400 bad request when password too short", async () => {
+    const uniqueEmail = generateUniqueEmail('test');
+    const username = generateUniqueUsername();
+    
     const res = await request(app)
       .post("/signup")
       .send({ 
-        email: "test@example.com", 
+        email: uniqueEmail, 
         password: "short", 
         firstName: "Test", 
         lastName: "User", 
-        username: "testuser" 
+        username 
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -76,10 +80,12 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 400 bad request when username invalid format", async () => {
+    const uniqueEmail = generateUniqueEmail('test');
+    
     const res = await request(app)
       .post("/signup")
       .send({ 
-        email: "test@example.com", 
+        email: uniqueEmail, 
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
@@ -91,18 +97,17 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 400 bad request when isPaid field is present", async () => {
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 8);
+    const email1 = generateUniqueEmail('test1', testNamespace);
     
     // Test with isPaid: true
     const res1 = await request(app)
       .post("/signup")
       .send({ 
-        email: `${testNamespace.substring(0, 8)}_${randomId}@example.com`, 
+        email: email1, 
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: `u${timestamp.toString().slice(-8)}${randomId}`,
+        username: generateUniqueUsername(),
         isPaid: true // This should be rejected
       });
     expect(res1.status).toBe(400);
@@ -110,14 +115,15 @@ describe("auth endpoints", () => {
     expect(res1.body.error).toContain("isPaid field is not allowed");
 
     // Test with isPaid: false (should also be rejected)
+    const email2 = generateUniqueEmail('test2', testNamespace);
     const res2 = await request(app)
       .post("/signup")
       .send({ 
-        email: `${testNamespace.substring(0, 8)}_${randomId}b@example.com`, 
+        email: email2, 
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: `u${timestamp.toString().slice(-8)}${randomId}b`,
+        username: generateUniqueUsername(),
         isPaid: false // This should also be rejected
       });
     expect(res2.status).toBe(400);
@@ -126,7 +132,7 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 409 conflictwhen email already exists", async () => {
-    const email = `duplicate${Date.now()}@example.com`;
+    const email = generateUniqueEmail('duplicate');
     
     // Create first user
     await request(app)
@@ -136,7 +142,7 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "First", 
         lastName: "User", 
-        username: `first${Date.now()}` 
+        username: generateUniqueUsername() 
       });
 
     // Try to create second user with same email
@@ -147,7 +153,7 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Second", 
         lastName: "User", 
-        username: `second${Date.now()}` 
+        username: generateUniqueUsername() 
       });
     
     expect(res.status).toBe(409);
@@ -156,13 +162,13 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 409 conflict when username already exists", async () => {
-    const username = `duplicate${Date.now()}`;
+    const username = generateUniqueUsername();
     
     // Create first user
     await request(app)
       .post("/signup")
       .send({ 
-        email: `first${Date.now()}@example.com`, 
+        email: generateUniqueEmail('first'), 
         password: "testpass123", 
         firstName: "First", 
         lastName: "User", 
@@ -173,7 +179,7 @@ describe("auth endpoints", () => {
     const res = await request(app)
       .post("/signup")
       .send({ 
-        email: `second${Date.now()}@example.com`, 
+        email: generateUniqueEmail('second'), 
         password: "testpass123", 
         firstName: "Second", 
         lastName: "User", 
@@ -186,10 +192,8 @@ describe("auth endpoints", () => {
   });
 
   it("login res 200 'ok' with token", async () => {
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 8);
-    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
-    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
+    const email = generateUniqueEmail('login', testNamespace);
+    const username = generateUniqueUsername();
     await request(app)
       .post("/signup")
       .send({ 
@@ -197,7 +201,7 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: username 
+        username 
       });
     const res = await request(app)
       .post("/login")
@@ -207,10 +211,8 @@ describe("auth endpoints", () => {
   });
 
   it("login w/wrong password res 401 'Unauthorized'", async () => {
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 8);
-    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
-    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
+    const email = generateUniqueEmail('wrongpass', testNamespace);
+    const username = generateUniqueUsername();
     await request(app)
       .post("/signup")
       .send({ 
@@ -227,10 +229,8 @@ describe("auth endpoints", () => {
   });
 
   it("rejects tokens from banned users", async () => {
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 8);
-    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
-    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
+    const email = generateUniqueEmail('banned', testNamespace);
+    const username = generateUniqueUsername();
     
     // Create user and get token
     await request(app)

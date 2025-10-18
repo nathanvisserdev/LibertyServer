@@ -4,6 +4,7 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
@@ -19,9 +20,6 @@ async function createUserAndGetToken(
   username?: string, 
   bio?: string
 ) {
-  const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
-  
   let isPaid = false;
   let userEmail: string;
   let userPassword: string;
@@ -34,22 +32,22 @@ async function createUserAndGetToken(
     isPaid = isPaidOrOptions;
     if (typeof emailOrOptions === 'object' && emailOrOptions !== null) {
       // Pattern: createUserAndGetToken(false, { username: "johndoe" })
-      userEmail = emailOrOptions.email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
-      userUsername = emailOrOptions.username || `u${timestamp.toString().slice(-8)}${randomId}`;
+      userEmail = emailOrOptions.email || generateUniqueEmail('test', testNamespace);
+      userUsername = emailOrOptions.username || generateUniqueUsername();
       firstName = emailOrOptions.firstName || "Test";
       lastName = emailOrOptions.lastName || "User";
       userPassword = password || "testpass123";
     } else {
       // Pattern: createUserAndGetToken(false, "email@test.com", "password", "username")
-      userEmail = emailOrOptions || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+      userEmail = emailOrOptions || generateUniqueEmail('test', testNamespace);
       userPassword = password || "testpass123";
-      userUsername = username || `u${timestamp.toString().slice(-8)}${randomId}`;
+      userUsername = username || generateUniqueUsername();
     }
   } else {
     // Handle legacy patterns or default
-    userEmail = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+    userEmail = generateUniqueEmail('test', testNamespace);
     userPassword = "testpass123";
-    userUsername = `u${timestamp.toString().slice(-8)}${randomId}`;
+    userUsername = generateUniqueUsername();
   }
   
   const signupRes = await request(app)
