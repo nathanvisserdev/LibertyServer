@@ -13,7 +13,7 @@ const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36
 const prisma = new PrismaClient();
 
 // Helper function to create a user and get token
-async function createUserAndGetToken(isPaid?: boolean, email?: string, password?: string, username?: string, bio?: string) {
+async function createUserAndGetToken(isPaid?: boolean, email?: string, password?: string, username?: string) {
   const userEmail = email || generateUniqueEmail('test', testNamespace);
   const userPassword = password || "testpass123";
   const userUsername = username || generateUniqueUsername();
@@ -25,9 +25,13 @@ async function createUserAndGetToken(isPaid?: boolean, email?: string, password?
       password: userPassword,
       firstName: "Test",
       lastName: "User",
-      username: userUsername,
-      bio: bio || "Test bio"
+      username: userUsername
     });
+  
+  // Validate signup response
+  if (signupRes.status !== 201 || !signupRes.body || !signupRes.body.id) {
+    throw new Error(`Signup failed: ${JSON.stringify(signupRes.body)} (status: ${signupRes.status})`);
+  }
   
   // If isPaid is true, update the user to be paid
   if (isPaid) {
