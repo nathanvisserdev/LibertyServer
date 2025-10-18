@@ -70,12 +70,17 @@ router.post("/connections/request", auth, async (req, res) => {
     if (isBlocked || isHidden || isBanned) {
       return res.status(404).send("User not found");
     } else if (existingConnection && existingConnection.type === "ACQUAINTANCE") {
+      // ACQUAINTANCE is the highest level - reject ALL request types
       if (requestType === "ACQUAINTANCE") {
         return res.status(409).json({
           error: "The request can't proceed because the relationship already exists in that state."
         });
+      } else {
+        // Reject STRANGER and FOLLOW requests (would be downgrades)
+        return res.status(409).json({
+          error: "Invalid request type for existing relationship"
+        });
       }
-      // Allow FOLLOW and STRANGER requests for existing ACQUAINTANCE connections
     } else if (existingConnection && existingConnection.type === "STRANGER") {
       // Allow only incoming requestType === "ACQUAINTANCE" and reject any other
       if (requestType !== "ACQUAINTANCE") {

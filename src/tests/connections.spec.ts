@@ -298,6 +298,29 @@ describe("connections endpoints", () => {
       expect(res.body.error).toBe("The request can't proceed because the relationship already exists in that state.");
     });
 
+    it("rejects STRANGER request when ACQUAINTANCE connection exists", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+      
+      // Create existing ACQUAINTANCE connection
+      await createConnection(requester.id, requested.id, "ACQUAINTANCE");
+      
+      const token = getAuthToken(requester.id, requester.email);
+
+      const res = await request(app)
+        .post("/connections/request")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          requestedId: requested.id,
+          requestType: "STRANGER" 
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe("Invalid request type for existing relationship");
+    });
+
     it("allows ACQUAINTANCE request when STRANGER connection exists", async () => {
       const [requester, requested] = await Promise.all([
         createTestUser(),
@@ -396,7 +419,7 @@ describe("connections endpoints", () => {
       expect(res.body).toHaveProperty("requestType", "ACQUAINTANCE");
     });
 
-    it("successfully creates ACQUAINTANCE request when not connected", async () => {
+    it("allows ACQUAINTANCE request when no connection exists", async () => {
       const [requester, requested] = await Promise.all([
         createTestUser(),
         createTestUser()
@@ -429,7 +452,7 @@ describe("connections endpoints", () => {
       expect(connectionRequest).toBeTruthy();
     });
 
-    it("successfully creates STRANGER request when not connected", async () => {
+    it("allows STRANGER request when no connection exists", async () => {
       const [requester, requested] = await Promise.all([
         createTestUser(),
         createTestUser()
@@ -510,7 +533,7 @@ describe("connections endpoints", () => {
       expect(allRequests).toHaveLength(1);
     });
 
-    it("successfully creates FOLLOW request when not connected", async () => {
+    it("allows FOLLOW request when no connection exists", async () => {
       const [requester, requested] = await Promise.all([
         createTestUser(),
         createTestUser()
@@ -589,7 +612,7 @@ describe("connections endpoints", () => {
       expect(res.body.error).toBe("Invalid request type for existing relationship");
     });
 
-    it("allows FOLLOW request when ACQUAINTANCE connection exists", async () => {
+    it("rejects FOLLOW request when ACQUAINTANCE connection exists", async () => {
       const [requester, requested] = await Promise.all([
         createTestUser(),
         createTestUser()
@@ -608,10 +631,8 @@ describe("connections endpoints", () => {
           requestType: "FOLLOW" 
         });
 
-      expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty("requesterId", requester.id);
-      expect(res.body).toHaveProperty("requestedId", requested.id);
-      expect(res.body).toHaveProperty("requestType", "FOLLOW");
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe("Invalid request type for existing relationship");
     });
   });
 });
