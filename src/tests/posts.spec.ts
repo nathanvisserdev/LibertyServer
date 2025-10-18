@@ -1,12 +1,23 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../index.js";
+import { PrismaClient } from "../generated/prisma/index.js";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const testFileName = path.basename(__filename, '.spec.ts');
+const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+const prisma = new PrismaClient();
 
 // Helper function to create a user and get token
 async function createUserAndGetToken(email?: string, password?: string) {
-  const userEmail = email || `user${Date.now()}@example.com`;
-  const userPassword = password || "testpass123";
   const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
+  const userEmail = email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+  const userPassword = password || "testpass123";
+  const username = `u${timestamp.toString().slice(-8)}${randomId}`; // Valid username: u + last 8 digits of timestamp + random chars
   
   const signupRes = await request(app)
     .post("/signup")
@@ -15,7 +26,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
       password: userPassword,
       firstName: "Test",
       lastName: "User",
-      username: `user${timestamp}`
+      username: username
     });
   
   const loginRes = await request(app)
@@ -31,6 +42,19 @@ async function createUserAndGetToken(email?: string, password?: string) {
 }
 
 describe("posts endpoints", () => {
+  // Clean up test data after all tests complete
+  afterAll(async () => {
+    // Only delete test users created by this test file
+    await prisma.users.deleteMany({
+      where: {
+        email: {
+          contains: testNamespace
+        }
+      }
+    });
+    await prisma.$disconnect();
+  });
+
   describe("POST /posts", () => {
     it("returns 401 unauthorized without authentication token", async () => {
       const res = await request(app)
@@ -568,6 +592,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
+      expect(createRes.status).toBe(201);
       const postId = createRes.body.id;
       
       // Try to update with invalid visibility

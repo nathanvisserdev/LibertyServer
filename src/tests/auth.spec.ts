@@ -1,14 +1,35 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../index.js";
+import { PrismaClient } from "../generated/prisma/index.js";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const testFileName = path.basename(__filename, '.spec.ts');
+const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+const prisma = new PrismaClient();
 
 describe("auth endpoints", () => {
+  // Clean up test data after all tests complete
+  afterAll(async () => {
+    // Only delete test users created by this test file
+    await prisma.users.deleteMany({
+      where: {
+        email: {
+          contains: testNamespace
+        }
+      }
+    });
+    await prisma.$disconnect();
+  });
+
   it("signup: 201 created 'server successfully created new resource' and user", async () => {
-    const d = new Date();
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-    const email = `user${ts}@example.com`;
-    const username = `user${ts}`;
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
     const res = await request(app)
       .post("/signup")
       .send({ 
@@ -70,19 +91,18 @@ describe("auth endpoints", () => {
   });
 
   it("signup: 400 bad request when isPaid field is present", async () => {
-    const d = new Date();
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${Math.floor(Math.random()*1000)}`;
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
     
     // Test with isPaid: true
     const res1 = await request(app)
       .post("/signup")
       .send({ 
-        email: `test${ts}@example.com`, 
+        email: `${testNamespace.substring(0, 8)}_${randomId}@example.com`, 
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: `test${ts}`,
+        username: `u${timestamp.toString().slice(-8)}${randomId}`,
         isPaid: true // This should be rejected
       });
     expect(res1.status).toBe(400);
@@ -93,11 +113,11 @@ describe("auth endpoints", () => {
     const res2 = await request(app)
       .post("/signup")
       .send({ 
-        email: `test${ts}b@example.com`, 
+        email: `${testNamespace.substring(0, 8)}_${randomId}b@example.com`, 
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: `test${ts}b`,
+        username: `u${timestamp.toString().slice(-8)}${randomId}b`,
         isPaid: false // This should also be rejected
       });
     expect(res2.status).toBe(400);
@@ -166,7 +186,10 @@ describe("auth endpoints", () => {
   });
 
   it("login res 200 'ok' with token", async () => {
-    const email = `user${Date.now()}@example.com`;
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
     await request(app)
       .post("/signup")
       .send({ 
@@ -174,7 +197,7 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: `user${Date.now()}` 
+        username: username 
       });
     const res = await request(app)
       .post("/login")
@@ -184,7 +207,10 @@ describe("auth endpoints", () => {
   });
 
   it("login w/wrong password res 401 'Unauthorized'", async () => {
-    const email = `user${Date.now()}@example.com`;
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
     await request(app)
       .post("/signup")
       .send({ 
@@ -192,7 +218,7 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: `user${Date.now()}` 
+        username: username 
       });
     const res = await request(app)
       .post("/login")

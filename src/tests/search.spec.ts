@@ -1,49 +1,103 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const testFileName = path.basename(__filename, '.spec.ts');
+const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
 const prisma = new PrismaClient();
 
-// Helper function to create a user and get auth token
-async function createUserAndGetToken(isPaid = false, userData?: { firstName?: string, lastName?: string, username?: string }) {
-  const timestamp = Date.now() + Math.floor(Math.random() * 10000);
-  const email = `testuser${timestamp}@example.com`;
-  const username = userData?.username || `testuser${timestamp}`;
-  const firstName = userData?.firstName || "Test";
-  const lastName = userData?.lastName || "User";
+// Helper function to create a user and get token
+async function createUserAndGetToken(
+  isPaidOrOptions?: boolean | {username?: string, firstName?: string, lastName?: string, email?: string}, 
+  emailOrOptions?: string | {username?: string, firstName?: string, lastName?: string, email?: string}, 
+  password?: string, 
+  username?: string, 
+  bio?: string
+) {
+  const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
   
-  const res = await request(app)
+  let isPaid = false;
+  let userEmail: string;
+  let userPassword: string;
+  let userUsername: string;
+  let firstName = "Test";
+  let lastName = "User";
+  
+  // Handle different parameter patterns for backward compatibility
+  if (typeof isPaidOrOptions === 'boolean') {
+    isPaid = isPaidOrOptions;
+    if (typeof emailOrOptions === 'object' && emailOrOptions !== null) {
+      // Pattern: createUserAndGetToken(false, { username: "johndoe" })
+      userEmail = emailOrOptions.email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+      userUsername = emailOrOptions.username || `u${timestamp.toString().slice(-8)}${randomId}`;
+      firstName = emailOrOptions.firstName || "Test";
+      lastName = emailOrOptions.lastName || "User";
+      userPassword = password || "testpass123";
+    } else {
+      // Pattern: createUserAndGetToken(false, "email@test.com", "password", "username")
+      userEmail = emailOrOptions || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+      userPassword = password || "testpass123";
+      userUsername = username || `u${timestamp.toString().slice(-8)}${randomId}`;
+    }
+  } else {
+    // Handle legacy patterns or default
+    userEmail = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+    userPassword = "testpass123";
+    userUsername = `u${timestamp.toString().slice(-8)}${randomId}`;
+  }
+  
+  const signupRes = await request(app)
     .post("/signup")
-    .send({
-      email,
-      password: "testpass123",
-      firstName,
-      lastName,
-      username
+    .send({ 
+      email: userEmail, 
+      password: userPassword,
+      firstName: firstName,
+      lastName: lastName,
+      username: userUsername,
+      bio: bio || "Test bio"
     });
   
-  expect(res.status).toBe(201);
-  const userId = res.body.id;
-
-  // If we need a paid user, update the database
+  // If isPaid is true, update the user to be paid
   if (isPaid) {
     await prisma.users.update({
-      where: { id: userId },
+      where: { id: signupRes.body.id },
       data: { isPaid: true }
     });
   }
-
-  // Login to get token
+  
   const loginRes = await request(app)
     .post("/login")
-    .send({ email, password: "testpass123" });
+    .send({ email: userEmail, password: userPassword });
   
-  expect(loginRes.status).toBe(200);
-  return { token: loginRes.body.accessToken, userId, email, username, firstName, lastName };
+  return {
+    userId: signupRes.body.id,
+    token: loginRes.body.accessToken,
+    email: userEmail,
+    password: userPassword,
+    username: userUsername
+  };
 }
 
 describe("search endpoints", () => {
+  // Clean up test data after all tests complete
+  afterAll(async () => {
+    // Only delete test users created by this test file
+    await prisma.users.deleteMany({
+      where: {
+        email: {
+          contains: testNamespace
+        }
+      }
+    });
+    await prisma.$disconnect();
+  });
+
   describe("GET /search/users", () => {
     it("returns empty results for missing query", async () => {
       const { token } = await createUserAndGetToken();

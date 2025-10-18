@@ -1,37 +1,44 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const testFileName = path.basename(__filename, '.spec.ts');
+const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
 const prisma = new PrismaClient();
 
 // Helper function to create a user and get token
-async function createUserAndGetToken(email?: string, password?: string) {
-  const userEmail = email || `user-${Date.now()}@example.com`;
+async function createUserAndGetToken(email?: string, password?: string, username?: string) {
+  const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
+  const userEmail = email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
   const userPassword = password || "testpass123";
+  const userUsername = username || `u${timestamp.toString().slice(-8)}${randomId}`; // Valid username: u + last 8 digits of timestamp + random chars
   
-  const res = await request(app)
+  const signupRes = await request(app)
     .post("/signup")
-    .send({
-      email: userEmail,
+    .send({ 
+      email: userEmail, 
       password: userPassword,
       firstName: "Test",
       lastName: "User",
-      username: `testuser${Date.now()}`,
+      username: userUsername
     });
   
   const loginRes = await request(app)
     .post("/login")
-    .send({
-      email: userEmail,
-      password: userPassword,
-    });
+    .send({ email: userEmail, password: userPassword });
   
   return {
-    userId: res.body.id,
+    userId: signupRes.body.id,
     token: loginRes.body.accessToken,
     email: userEmail,
     password: userPassword,
+    username: userUsername
   };
 }
 
@@ -57,6 +64,19 @@ async function createBlock(blockerId: string, blockedId: string) {
 }
 
 describe("profile endpoints", () => {
+  // Clean up test data after all tests complete
+  afterAll(async () => {
+    // Only delete test users created by this test file
+    await prisma.users.deleteMany({
+      where: {
+        email: {
+          contains: testNamespace
+        }
+      }
+    });
+    await prisma.$disconnect();
+  });
+
   describe("GET /users/:id", () => {
     it("returns 401 unauthorized without authentication token", async () => {
       const res = await request(app).get("/users/some-id");

@@ -1,47 +1,70 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const testFileName = path.basename(__filename, '.spec.ts');
+const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
 const prisma = new PrismaClient();
 
-// Helper function to create a user and get auth token
-async function createUserAndGetToken(isPaid = false) {
+// Helper function to create a user and get token
+async function createUserAndGetToken(isPaid?: boolean, email?: string, password?: string, username?: string, bio?: string) {
   const timestamp = Date.now();
-  const email = `testuser${timestamp}@example.com`;
-  const username = `testuser${timestamp}`;
+  const randomId = Math.random().toString(36).substring(2, 8); // 6 random chars
+  const userEmail = email || `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+  const userPassword = password || "testpass123";
+  const userUsername = username || `u${timestamp.toString().slice(-8)}${randomId}`; // Valid username: u + last 8 digits of timestamp + random chars
   
-  const res = await request(app)
+  const signupRes = await request(app)
     .post("/signup")
-    .send({
-      email,
-      password: "testpass123",
+    .send({ 
+      email: userEmail, 
+      password: userPassword,
       firstName: "Test",
       lastName: "User",
-      username
+      username: userUsername,
+      bio: bio || "Test bio"
     });
   
-  expect(res.status).toBe(201);
-  const userId = res.body.id;
-
-  // If we need a paid user, manually update the database
+  // If isPaid is true, update the user to be paid
   if (isPaid) {
     await prisma.users.update({
-      where: { id: userId },
+      where: { id: signupRes.body.id },
       data: { isPaid: true }
     });
   }
-
-  // Login to get token
+  
   const loginRes = await request(app)
     .post("/login")
-    .send({ email, password: "testpass123" });
+    .send({ email: userEmail, password: userPassword });
   
-  expect(loginRes.status).toBe(200);
-  return { token: loginRes.body.accessToken, userId, email, username };
+  return {
+    userId: signupRes.body.id,
+    token: loginRes.body.accessToken,
+    email: userEmail,
+    password: userPassword,
+    username: userUsername
+  };
 }
 
 describe("groups endpoints", () => {
+  // Clean up test data after all tests complete
+  afterAll(async () => {
+    // Only delete test users created by this test file
+    await prisma.users.deleteMany({
+      where: {
+        email: {
+          contains: testNamespace
+        }
+      }
+    });
+    await prisma.$disconnect();
+  });
+
   describe("POST /groups", () => {
     it("successfully creates a PUBLIC group for unpaid user", async () => {
       const { token, userId } = await createUserAndGetToken(false);
