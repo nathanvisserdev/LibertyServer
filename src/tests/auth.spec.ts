@@ -225,4 +225,49 @@ describe("auth endpoints", () => {
       .send({ email, password: "wrongpass" });
     expect(res.status).toBe(401);
   });
+
+  it("rejects tokens from banned users", async () => {
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const email = `${testNamespace.substring(0, 8)}_${randomId}@example.com`;
+    const username = `u${timestamp.toString().slice(-8)}${randomId}`;
+    
+    // Create user and get token
+    await request(app)
+      .post("/signup")
+      .send({ 
+        email, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username: username 
+      });
+    
+    const loginRes = await request(app)
+      .post("/login")
+      .send({ email, password: "testpass123" });
+    
+    expect(loginRes.status).toBe(200);
+    const token = loginRes.body.accessToken;
+    
+    // Verify token works initially by making a request that requires auth
+    const initialRes = await request(app)
+      .get("/user/me")
+      .set("Authorization", `Bearer ${token}`);
+    expect(initialRes.status).toBe(200);
+    
+    // Ban the user
+    const user = await prisma.users.findUnique({ where: { email } });
+    await prisma.users.update({
+      where: { id: user!.id },
+      data: { isBanned: true }
+    });
+    
+    // Verify token is now rejected
+    const bannedRes = await request(app)
+      .get("/user/me")
+      .set("Authorization", `Bearer ${token}`);
+    expect(bannedRes.status).toBe(403);
+    expect(bannedRes.text).toBe("Account banned");
+  });
 });

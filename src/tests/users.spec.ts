@@ -325,7 +325,8 @@ async function createUserAndGetToken(email?: string, password?: string) {
         .get("/user/me")
         .set("Authorization", `Bearer ${token}`);
       
-      expect(checkRes.status).toBe(404);
+      expect(checkRes.status).toBe(401);
+      expect(checkRes.text).toBe("User not found");
     });
 
     it("returns 409 conflict when user administers non-PERSONAL groups without force", async () => {
@@ -402,7 +403,8 @@ async function createUserAndGetToken(email?: string, password?: string) {
         .get("/user/me")
         .set("Authorization", `Bearer ${token}`);
       
-      expect(checkRes.status).toBe(404);
+      expect(checkRes.status).toBe(401);
+      expect(checkRes.text).toBe("User not found");
       
       // Verify we cannot login with the deleted user credentials
       const loginRes = await request(app)
