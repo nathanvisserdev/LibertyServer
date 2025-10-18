@@ -79,6 +79,18 @@ router.get("/users/:id", auth, async (req, res) => {
     const isConnected = !!connection;
     const connectionStatus = connection?.type || null;
 
+    // Check for pending connection request from session user to target user
+    const pendingConnectionRequest = await prisma.connectionRequest.findFirst({
+      where: {
+        requesterId: sessionUserId,
+        requestedId: targetUserId,
+        status: "PENDING"
+      }
+    });
+
+    const pendingRequest = !!pendingConnectionRequest;
+    const requestType = pendingRequest ? pendingConnectionRequest.type : null;
+
     // Build response based on privacy and connection status
     if (isConnected || !targetUser.isPrivate) {
       // Connected or target is not private - show extended profile
@@ -91,6 +103,7 @@ router.get("/users/:id", auth, async (req, res) => {
         photo: targetUser.photo,
         about: targetUser.about,
         connectionStatus: connectionStatus,
+        requestType: requestType,
       });
     } else {
       // Target is private and not connected - show minimal profile
@@ -101,6 +114,7 @@ router.get("/users/:id", auth, async (req, res) => {
         username: targetUser.username,
         photo: targetUser.photo,
         connectionStatus: connectionStatus,
+        requestType: requestType,
       });
     }
 

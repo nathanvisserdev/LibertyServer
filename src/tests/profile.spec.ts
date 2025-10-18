@@ -191,6 +191,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", "ACQUAINTANCE");
+      expect(res.body).toHaveProperty("requestType", null);
     });
 
     it("returns extended profile when users are connected as strangers", async () => {
@@ -214,6 +215,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", "STRANGER");
+      expect(res.body).toHaveProperty("requestType", null);
     });
 
     it("returns extended profile when session user follows target user", async () => {
@@ -237,6 +239,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", "IS_FOLLOWING");
+      expect(res.body).toHaveProperty("requestType", null);
     });
 
     it("returns extended profile when target user is not private (even if not connected)", async () => {
@@ -262,6 +265,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", null);
     });
 
     it("returns minimal profile when target is private and not connected", async () => {
@@ -312,6 +316,192 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", "IS_FOLLOWING");
+      expect(res.body).toHaveProperty("requestType", null);
+    });
+
+    it("returns requestType when session user has pending ACQUAINTANCE request to target", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Create pending connection request
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: sessionUserId,
+          requestedId: targetUserId,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", "ACQUAINTANCE");
+    });
+
+    it("returns requestType when session user has pending STRANGER request to target", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Create pending connection request
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: sessionUserId,
+          requestedId: targetUserId,
+          type: "STRANGER",
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", "STRANGER");
+    });
+
+    it("returns requestType when session user has pending FOLLOW request to target", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Create pending connection request
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: sessionUserId,
+          requestedId: targetUserId,
+          type: "FOLLOW",
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", "FOLLOW");
+    });
+
+    it("returns null requestType when target user has pending request to session user (reverse)", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Create pending connection request FROM target TO session user (reverse)
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: targetUserId,
+          requestedId: sessionUserId,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", null);
+    });
+
+    it("returns null requestType when connection request is not PENDING", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Create ACCEPTED connection request
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: sessionUserId,
+          requestedId: targetUserId,
+          type: "ACQUAINTANCE",
+          status: "ACCEPTED"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", null);
+    });
+
+    it("returns requestType in minimal profile for private user with pending request", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Make target user private
+      await prisma.users.update({
+        where: { id: targetUserId },
+        data: { isPrivate: true },
+      });
+
+      // Create pending connection request
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: sessionUserId,
+          requestedId: targetUserId,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", "ACQUAINTANCE");
+      
+      // Should be minimal profile (no gender/about)
+      expect(res.body).not.toHaveProperty("gender");
+      expect(res.body).not.toHaveProperty("about");
+    });
+
+    it("returns requestType in extended profile for non-private user with pending request", async () => {
+      const { userId: sessionUserId, token: sessionToken } = await createUserAndGetToken();
+      const { userId: targetUserId } = await createUserAndGetToken();
+      
+      // Make target user NOT private (so we get extended profile)
+      await prisma.users.update({
+        where: { id: targetUserId },
+        data: { isPrivate: false },
+      });
+
+      // Create pending connection request
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: sessionUserId,
+          requestedId: targetUserId,
+          type: "STRANGER",
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("connectionStatus", null);
+      expect(res.body).toHaveProperty("requestType", "STRANGER");
+      
+      // Should be extended profile (includes gender/about)
+      expect(res.body).toHaveProperty("gender");
+      expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("firstName");
+      expect(res.body).toHaveProperty("lastName");
+      expect(res.body).toHaveProperty("username");
+      expect(res.body).toHaveProperty("photo");
     });
 
     it("handles null photo and about fields correctly", async () => {
@@ -362,6 +552,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus");
+      expect(res.body).toHaveProperty("requestType");
       
       // Should not have sensitive fields
       expect(res.body).not.toHaveProperty("password");
@@ -394,6 +585,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("username");
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("connectionStatus");
+      expect(res.body).toHaveProperty("requestType");
       
       // Should not have extended fields
       expect(res.body).not.toHaveProperty("gender");
