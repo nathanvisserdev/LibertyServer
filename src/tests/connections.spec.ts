@@ -634,24 +634,12 @@ describe("connections endpoints", () => {
     });
   });
 
-  describe("GET /connections/pending", () => {
+  describe("GET /connections/pending/incoming", () => {
     it("returns 401 unauthorized without authentication token", async () => {
       const res = await request(app)
-        .get("/connections/pending?type=received");
+        .get("/connections/pending/incoming");
       
       expect(res.status).toBe(401);
-    });
-
-    it("returns 400 bad request for invalid type parameter", async () => {
-      const user = await createTestUser();
-      const token = getAuthToken(user.id);
-
-      const res = await request(app)
-        .get("/connections/pending?type=invalid")
-        .set("Authorization", `Bearer ${token}`);
-      
-      expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid type parameter: must be 'received'");
     });
 
     it("returns empty array when no pending requests exist", async () => {
@@ -659,7 +647,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user.id);
 
       const res = await request(app)
-        .get("/connections/pending?type=received")
+        .get("/connections/pending/incoming")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
@@ -697,7 +685,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(requested.id);
 
       const res = await request(app)
-        .get("/connections/pending?type=received")
+        .get("/connections/pending/incoming")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
@@ -743,7 +731,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(requester.id);
 
       const res = await request(app)
-        .get("/connections/pending?type=received")
+        .get("/connections/pending/incoming")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
@@ -780,7 +768,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(requested.id);
 
       const res = await request(app)
-        .get("/connections/pending?type=received")
+        .get("/connections/pending/incoming")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
@@ -820,7 +808,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(requested.id);
 
       const res = await request(app)
-        .get("/connections/pending?type=received")
+        .get("/connections/pending/incoming")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);

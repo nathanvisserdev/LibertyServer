@@ -135,18 +135,12 @@ router.post("/connections/request", auth, async (req, res) => {
   }
 });
 
-// --- GET /connections/pending?type=received ---
-router.get("/connections/pending", auth, async (req, res) => {
+// --- GET /connections/pending/incoming ---
+router.get("/connections/pending/incoming", auth, async (req, res) => {
   if (!req.user) {
     return res.status(401).send("Invalid token payload");
   }
   const sessionUserId = req.user.id;
-  const { type } = req.query;
-
-  // Validate type parameter
-  if (type !== "received") {
-    return res.status(400).send("Invalid type parameter: must be 'received'");
-  }
 
   try {
     const incomingRequests: any[] = [];
