@@ -59,8 +59,8 @@ async function createConnection(requesterId: string, requestedId: string, type: 
   });
 }
 
-function getAuthToken(userId: string, email: string) {
-  return jwt.sign({ id: userId, email }, JWT_SECRET);
+function getAuthToken(userId: string) {
+  return jwt.sign({ id: userId }, JWT_SECRET);
 }
 
 describe("connections endpoints", () => {
@@ -101,7 +101,7 @@ describe("connections endpoints", () => {
   describe("POST /connections/request", () => {
     it("returns 400 bad request when requestedId is missing", async () => {
       const user = await createTestUser();
-      const token = getAuthToken(user.id, user.email);
+      const token = getAuthToken(user.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -117,7 +117,7 @@ describe("connections endpoints", () => {
         createTestUser(),
         createTestUser()
       ]);
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -133,7 +133,7 @@ describe("connections endpoints", () => {
 
     it("returns 400 bad request when trying to connect to yourself", async () => {
       const user = await createTestUser();
-      const token = getAuthToken(user.id, user.email);
+      const token = getAuthToken(user.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -156,7 +156,7 @@ describe("connections endpoints", () => {
       // Create block: requested blocks requester
       await createBlock(requested.id, requester.id);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -179,7 +179,7 @@ describe("connections endpoints", () => {
       // Create block: requester blocks requested
       await createBlock(requester.id, requested.id);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -199,7 +199,7 @@ describe("connections endpoints", () => {
         createTestUser()
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -219,7 +219,7 @@ describe("connections endpoints", () => {
         createTestUser({ isHidden: true })
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -239,7 +239,7 @@ describe("connections endpoints", () => {
         createTestUser()
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -259,7 +259,7 @@ describe("connections endpoints", () => {
         createTestUser({ isBanned: true })
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -282,7 +282,7 @@ describe("connections endpoints", () => {
       // Create existing ACQUAINTANCE connection
       await createConnection(requester.id, requested.id, "ACQUAINTANCE");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -305,7 +305,7 @@ describe("connections endpoints", () => {
       // Create existing ACQUAINTANCE connection
       await createConnection(requester.id, requested.id, "ACQUAINTANCE");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -328,7 +328,7 @@ describe("connections endpoints", () => {
       // Create existing STRANGER connection
       await createConnection(requester.id, requested.id, "STRANGER");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -353,7 +353,7 @@ describe("connections endpoints", () => {
       // Create existing STRANGER connection
       await createConnection(requester.id, requested.id, "STRANGER");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -376,7 +376,7 @@ describe("connections endpoints", () => {
       // Create existing IS_FOLLOWING connection
       await createConnection(requester.id, requested.id, "IS_FOLLOWING");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -401,7 +401,7 @@ describe("connections endpoints", () => {
       // Create existing IS_FOLLOWING connection
       await createConnection(requester.id, requested.id, "IS_FOLLOWING");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -423,7 +423,7 @@ describe("connections endpoints", () => {
         createTestUser()
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -456,7 +456,7 @@ describe("connections endpoints", () => {
         createTestUser()
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -499,7 +499,7 @@ describe("connections endpoints", () => {
         }
       });
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       // Send ACQUAINTANCE request to same user
       const res = await request(app)
@@ -537,7 +537,7 @@ describe("connections endpoints", () => {
         createTestUser()
       ]);
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -573,7 +573,7 @@ describe("connections endpoints", () => {
       // Create existing STRANGER connection
       await createConnection(requester.id, requested.id, "STRANGER");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -596,7 +596,7 @@ describe("connections endpoints", () => {
       // Create existing IS_FOLLOWING connection
       await createConnection(requester.id, requested.id, "IS_FOLLOWING");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -619,7 +619,7 @@ describe("connections endpoints", () => {
       // Create existing ACQUAINTANCE connection
       await createConnection(requester.id, requested.id, "ACQUAINTANCE");
       
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .post("/connections/request")
@@ -644,7 +644,7 @@ describe("connections endpoints", () => {
 
     it("returns 400 bad request for invalid type parameter", async () => {
       const user = await createTestUser();
-      const token = getAuthToken(user.id, user.email);
+      const token = getAuthToken(user.id);
 
       const res = await request(app)
         .get("/connections/pending?type=invalid")
@@ -656,7 +656,7 @@ describe("connections endpoints", () => {
 
     it("returns empty array when no pending requests exist", async () => {
       const user = await createTestUser();
-      const token = getAuthToken(user.id, user.email);
+      const token = getAuthToken(user.id);
 
       const res = await request(app)
         .get("/connections/pending?type=received")
@@ -694,7 +694,7 @@ describe("connections endpoints", () => {
         })
       ]);
 
-      const token = getAuthToken(requested.id, requested.email);
+      const token = getAuthToken(requested.id);
 
       const res = await request(app)
         .get("/connections/pending?type=received")
@@ -740,7 +740,7 @@ describe("connections endpoints", () => {
         }
       });
 
-      const token = getAuthToken(requester.id, requester.email);
+      const token = getAuthToken(requester.id);
 
       const res = await request(app)
         .get("/connections/pending?type=received")
@@ -777,7 +777,7 @@ describe("connections endpoints", () => {
         })
       ]);
 
-      const token = getAuthToken(requested.id, requested.email);
+      const token = getAuthToken(requested.id);
 
       const res = await request(app)
         .get("/connections/pending?type=received")
@@ -817,7 +817,7 @@ describe("connections endpoints", () => {
         }
       });
 
-      const token = getAuthToken(requested.id, requested.email);
+      const token = getAuthToken(requested.id);
 
       const res = await request(app)
         .get("/connections/pending?type=received")
