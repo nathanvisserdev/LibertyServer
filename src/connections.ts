@@ -361,4 +361,82 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
   }
 });
 
+// --- DELETE /connections/:requestId/decline ---
+router.delete("/connections/:requestId/decline", auth, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = req.user.id;
+  const { requestId } = req.params;
+
+  // Validate requestId
+  if (!requestId || typeof requestId !== "string") {
+    return res.status(400).send("Invalid requestId");
+  }
+
+  try {
+    // Find the connection request
+    const connectionRequest = await prisma.connectionRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        requester: { select: { id: true, isHidden: true, isBanned: true } },
+        requested: { select: { id: true, isHidden: true, isBanned: true } }
+      }
+    });
+
+    if (!connectionRequest) {
+      return res.status(404).send("Connection request not found");
+    }
+
+    // Verify that the session user is the requested user (can only decline requests made to you)
+    if (connectionRequest.requestedId !== sessionUserId) {
+      return res.status(403).send("You can only decline requests made to you");
+    }
+
+    // Verify request is still pending
+    if (connectionRequest.status !== "PENDING") {
+      return res.status(409).send("Connection request is not pending");
+    }
+
+    // Check if either user is banned or hidden
+    if (connectionRequest.requester.isBanned || connectionRequest.requested.isBanned ||
+        connectionRequest.requester.isHidden || connectionRequest.requested.isHidden) {
+      return res.status(404).send("User not found");
+    }
+
+    // Check for existing block between users (bidirectional)
+    const blockExists = await prisma.blocks.findFirst({
+      where: {
+        OR: [
+          { blockerId: connectionRequest.requesterId, blockedId: connectionRequest.requestedId },
+          { blockerId: connectionRequest.requestedId, blockedId: connectionRequest.requesterId }
+        ]
+      }
+    });
+
+    if (blockExists) {
+      return res.status(404).send("User not found");
+    }
+
+    // Update the connection request status to DECLINED
+    const updatedRequest = await prisma.connectionRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "DECLINED",
+        decidedAt: new Date()
+      }
+    });
+
+    return res.status(200).json({
+      message: "Connection request declined",
+      requestId: updatedRequest.id,
+      status: updatedRequest.status
+    });
+
+  } catch (error) {
+    console.error("Decline connection request error:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
 export default router;

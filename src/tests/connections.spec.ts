@@ -1301,4 +1301,243 @@ describe("connections endpoints", () => {
       expect(updatedConnection?.type).toBe("ACQUAINTANCE");
     });
   });
+
+  describe("DELETE /connections/:requestId/decline", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const res = await request(app)
+        .delete("/connections/fake-id/decline");
+      
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 400 bad request when requestId is invalid", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .delete("/connections/invalid-id/decline")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404); // Invalid ID will result in "Connection request not found"
+      expect(res.text).toBe("Connection request not found");
+    });
+
+    it("returns 404 not found when connection request does not exist", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .delete("/connections/nonexistent-id/decline")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Connection request not found");
+    });
+
+    it("returns 403 forbidden when trying to decline a request you sent", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create a connection request FROM requester TO requested
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      // Try to decline with the requester's token (should fail)
+      const token = getAuthToken(requester.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("You can only decline requests made to you");
+    });
+
+    it("returns 409 conflict when connection request is not pending", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create an already accepted connection request
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "ACCEPTED"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(409);
+      expect(res.text).toBe("Connection request is not pending");
+    });
+
+    it("returns 404 when requester is banned", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser({ isBanned: true }),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("User not found");
+    });
+
+    it("returns 404 when users have blocked each other", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create block relationship
+      await createBlock(requester.id, requested.id);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("User not found");
+    });
+
+    it("successfully declines ACQUAINTANCE request - verifies status=DECLINED in database", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("message", "Connection request declined");
+      expect(res.body).toHaveProperty("requestId", connectionRequest.id);
+      expect(res.body).toHaveProperty("status", "DECLINED");
+
+      // Verify request status was updated in database
+      const updatedRequest = await prisma.connectionRequest.findUnique({
+        where: { id: connectionRequest.id }
+      });
+      expect(updatedRequest?.status).toBe("DECLINED");
+      expect(updatedRequest?.decidedAt).toBeTruthy();
+
+      // Verify no connection was created in connections table
+      const connection = await prisma.connections.findFirst({
+        where: {
+          OR: [
+            { requesterId: requester.id, requestedId: requested.id },
+            { requesterId: requested.id, requestedId: requester.id }
+          ]
+        }
+      });
+      expect(connection).toBe(null);
+    });
+
+    it("successfully declines STRANGER request - verifies status=DECLINED in database", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "STRANGER",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("DECLINED");
+
+      // Verify database update
+      const updatedRequest = await prisma.connectionRequest.findUnique({
+        where: { id: connectionRequest.id }
+      });
+      expect(updatedRequest?.status).toBe("DECLINED");
+    });
+
+    it("successfully declines FOLLOW request - verifies status=DECLINED in database", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "FOLLOW",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .delete(`/connections/${connectionRequest.id}/decline`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("DECLINED");
+
+      // Verify database update
+      const updatedRequest = await prisma.connectionRequest.findUnique({
+        where: { id: connectionRequest.id }
+      });
+      expect(updatedRequest?.status).toBe("DECLINED");
+    });
+  });
 });
