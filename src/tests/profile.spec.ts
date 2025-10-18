@@ -190,6 +190,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("connectionStatus", "ACQUAINTANCE");
     });
 
     it("returns extended profile when users are connected as strangers", async () => {
@@ -212,6 +213,7 @@ describe("profile endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("connectionStatus", "STRANGER");
     });
 
     it("returns extended profile when session user follows target user", async () => {
@@ -234,6 +236,7 @@ describe("profile endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("connectionStatus", "IS_FOLLOWING");
     });
 
     it("returns extended profile when target user is not private (even if not connected)", async () => {
@@ -258,6 +261,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("connectionStatus", null);
     });
 
     it("returns minimal profile when target is private and not connected", async () => {
@@ -280,6 +284,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("lastName", "User");
       expect(res.body).toHaveProperty("username");
       expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("connectionStatus", null);
       
       // Should NOT have these fields for private unconnected users
       expect(res.body).not.toHaveProperty("gender");
@@ -306,6 +311,7 @@ describe("profile endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("connectionStatus", "IS_FOLLOWING");
     });
 
     it("handles null photo and about fields correctly", async () => {
@@ -355,6 +361,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("photo");
       expect(res.body).toHaveProperty("about");
+      expect(res.body).toHaveProperty("connectionStatus");
       
       // Should not have sensitive fields
       expect(res.body).not.toHaveProperty("password");
@@ -386,6 +393,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("lastName");
       expect(res.body).toHaveProperty("username");
       expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("connectionStatus");
       
       // Should not have extended fields
       expect(res.body).not.toHaveProperty("gender");

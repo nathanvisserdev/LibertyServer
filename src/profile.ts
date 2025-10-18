@@ -77,6 +77,7 @@ router.get("/users/:id", auth, async (req, res) => {
     });
 
     const isConnected = !!connection;
+    const connectionStatus = connection?.type || null;
 
     // Build response based on privacy and connection status
     if (isConnected || !targetUser.isPrivate) {
@@ -89,6 +90,7 @@ router.get("/users/:id", auth, async (req, res) => {
         gender: targetUser.gender,
         photo: targetUser.photo,
         about: targetUser.about,
+        connectionStatus: connectionStatus,
       });
     } else {
       // Target is private and not connected - show minimal profile
@@ -98,6 +100,7 @@ router.get("/users/:id", auth, async (req, res) => {
         lastName: targetUser.lastName,
         username: targetUser.username,
         photo: targetUser.photo,
+        connectionStatus: connectionStatus,
       });
     }
 
