@@ -140,7 +140,7 @@ router.post("/login", async (req, res) => {
 
   if (user.isBanned) return res.status(403).send("account banned");
 
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "1h" });
+  const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1h" });
   return res.status(200).json({ accessToken: token });
 });
 

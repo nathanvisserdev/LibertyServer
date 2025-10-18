@@ -135,4 +135,65 @@ router.post("/connections/request", auth, async (req, res) => {
   }
 });
 
+// --- GET /connections/pending?type=received ---
+router.get("/connections/pending", auth, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = req.user.id;
+  const { type } = req.query;
+
+  // Validate type parameter
+  if (type !== "received") {
+    return res.status(400).send("Invalid type parameter: must be 'received'");
+  }
+
+  try {
+    const incomingRequests: any[] = [];
+
+    // Fetch all PENDING connection requests where session user is the requested user
+    const pendingRequests = await prisma.connectionRequest.findMany({
+      where: {
+        requestedId: sessionUserId,
+        status: "PENDING"
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            photo: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Add all matching requests to incomingRequests array
+    for (const request of pendingRequests) {
+      if (request.requestedId === sessionUserId && request.status === "PENDING") {
+        incomingRequests.push({
+          id: request.id,
+          requesterId: request.requesterId,
+          requestedId: request.requestedId,
+          type: request.type,
+          status: request.status,
+          createdAt: request.createdAt,
+          requester: request.requester
+        });
+      }
+    }
+
+    return res.status(200).json({ incomingRequests });
+
+  } catch (error) {
+    console.error("Get pending connections error:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
 export default router;

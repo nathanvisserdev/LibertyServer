@@ -633,4 +633,202 @@ describe("connections endpoints", () => {
       expect(res.body.error).toBe("Invalid request type for existing relationship");
     });
   });
+
+  describe("GET /connections/pending", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const res = await request(app)
+        .get("/connections/pending?type=received");
+      
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 400 bad request for invalid type parameter", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id, user.email);
+
+      const res = await request(app)
+        .get("/connections/pending?type=invalid")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Invalid type parameter: must be 'received'");
+    });
+
+    it("returns empty array when no pending requests exist", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id, user.email);
+
+      const res = await request(app)
+        .get("/connections/pending?type=received")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("incomingRequests");
+      expect(res.body.incomingRequests).toEqual([]);
+    });
+
+    it("returns pending connection requests where user is the requested user", async () => {
+      const [requester1, requester2, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create pending connection requests to the requested user
+      await Promise.all([
+        prisma.connectionRequest.create({
+          data: {
+            requesterId: requester1.id,
+            requestedId: requested.id,
+            type: "ACQUAINTANCE",
+            status: "PENDING"
+          }
+        }),
+        prisma.connectionRequest.create({
+          data: {
+            requesterId: requester2.id,
+            requestedId: requested.id,
+            type: "STRANGER", 
+            status: "PENDING"
+          }
+        })
+      ]);
+
+      const token = getAuthToken(requested.id, requested.email);
+
+      const res = await request(app)
+        .get("/connections/pending?type=received")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("incomingRequests");
+      expect(res.body.incomingRequests).toHaveLength(2);
+      
+      // Check that both requests are included
+      const requests = res.body.incomingRequests;
+      expect(requests.some((req: any) => req.requesterId === requester1.id && req.type === "ACQUAINTANCE")).toBe(true);
+      expect(requests.some((req: any) => req.requesterId === requester2.id && req.type === "STRANGER")).toBe(true);
+      
+      // Check request structure
+      expect(requests[0]).toHaveProperty("id");
+      expect(requests[0]).toHaveProperty("requesterId");
+      expect(requests[0]).toHaveProperty("requestedId", requested.id);
+      expect(requests[0]).toHaveProperty("type");
+      expect(requests[0]).toHaveProperty("status", "PENDING");
+      expect(requests[0]).toHaveProperty("createdAt");
+      expect(requests[0]).toHaveProperty("requester");
+      expect(requests[0].requester).toHaveProperty("id");
+      expect(requests[0].requester).toHaveProperty("firstName");
+      expect(requests[0].requester).toHaveProperty("lastName");
+      expect(requests[0].requester).toHaveProperty("username");
+      expect(requests[0].requester).toHaveProperty("photo");
+    });
+
+    it("does not return requests where user is the requester", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create a pending connection request FROM the user (not TO the user)
+      await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requester.id, requester.email);
+
+      const res = await request(app)
+        .get("/connections/pending?type=received")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.incomingRequests).toEqual([]);
+    });
+
+    it("does not return non-pending requests", async () => {
+      const [requester1, requester2, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create accepted and declined connection requests from different requesters
+      await Promise.all([
+        prisma.connectionRequest.create({
+          data: {
+            requesterId: requester1.id,
+            requestedId: requested.id,
+            type: "ACQUAINTANCE",
+            status: "ACCEPTED"
+          }
+        }),
+        prisma.connectionRequest.create({
+          data: {
+            requesterId: requester2.id,
+            requestedId: requested.id,
+            type: "STRANGER",
+            status: "DECLINED"
+          }
+        })
+      ]);
+
+      const token = getAuthToken(requested.id, requested.email);
+
+      const res = await request(app)
+        .get("/connections/pending?type=received")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.incomingRequests).toEqual([]);
+    });
+
+    it("orders requests by creation date (newest first)", async () => {
+      const [requester1, requester2, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create first request
+      const firstRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester1.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      // Wait a bit to ensure different timestamps
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Create second request 
+      const secondRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester2.id,
+          requestedId: requested.id,
+          type: "STRANGER",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id, requested.email);
+
+      const res = await request(app)
+        .get("/connections/pending?type=received")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.incomingRequests).toHaveLength(2);
+      
+      // Newest should be first
+      expect(res.body.incomingRequests[0].requesterId).toBe(requester2.id);
+      expect(res.body.incomingRequests[1].requesterId).toBe(requester1.id);
+    });
+  });
 });

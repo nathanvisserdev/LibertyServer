@@ -451,7 +451,10 @@ async function createUserAndGetToken(email?: string, password?: string) {
     });
 
     it("returns 403 forbidden when trying to update another user's security settings", async () => {
+      // Create first user
       const { token } = await createUserAndGetToken();
+      
+      // Create second user (ensure sequential creation to avoid race conditions)
       const { userId: otherUserId } = await createUserAndGetToken();
       
       const uniqueEmail = generateUniqueEmail('new');
