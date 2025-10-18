@@ -992,4 +992,313 @@ describe("connections endpoints", () => {
       expect(res.body.outgoingRequests[1].requestedId).toBe(requested1.id);
     });
   });
+
+  describe("POST /connections/:requestId/accept", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const res = await request(app)
+        .post("/connections/fake-id/accept");
+      
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 400 bad request when requestId is invalid", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .post("/connections/invalid-id/accept")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404); // Invalid ID will result in "Connection request not found"
+      expect(res.text).toBe("Connection request not found");
+    });
+
+    it("returns 404 not found when connection request does not exist", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .post("/connections/nonexistent-id/accept")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Connection request not found");
+    });
+
+    it("returns 403 forbidden when trying to accept a request you sent", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create a connection request FROM requester TO requested
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      // Try to accept with the requester's token (should fail)
+      const token = getAuthToken(requester.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("You can only accept requests made to you");
+    });
+
+    it("returns 409 conflict when connection request is not pending", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create an already accepted connection request
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "ACCEPTED"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(409);
+      expect(res.text).toBe("Connection request is not pending");
+    });
+
+    it("returns 404 when requester is banned", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser({ isBanned: true }),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("User not found");
+    });
+
+    it("returns 403 forbidden when requested user is banned (auth middleware)", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser({ isBanned: true })
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(403); // Auth middleware will catch banned user
+    });
+
+    it("returns 404 when users have blocked each other", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create block relationship
+      await createBlock(requester.id, requested.id);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("User not found");
+    });
+
+    it("successfully accepts ACQUAINTANCE request - verifies status=ACCEPTED and creates new connection", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("message", "Connection request accepted");
+      expect(res.body).toHaveProperty("requestId", connectionRequest.id);
+      expect(res.body).toHaveProperty("connectionId");
+      expect(res.body).toHaveProperty("type", "ACQUAINTANCE");
+
+      // Verify request status was updated
+      const updatedRequest = await prisma.connectionRequest.findUnique({
+        where: { id: connectionRequest.id }
+      });
+      expect(updatedRequest?.status).toBe("ACCEPTED");
+      expect(updatedRequest?.decidedAt).toBeTruthy();
+
+      // Verify connection was created
+      const connection = await prisma.connections.findFirst({
+        where: {
+          OR: [
+            { requesterId: requester.id, requestedId: requested.id },
+            { requesterId: requested.id, requestedId: requester.id }
+          ]
+        }
+      });
+      expect(connection).toBeTruthy();
+      expect(connection?.type).toBe("ACQUAINTANCE");
+    });
+
+    it("successfully accepts STRANGER request - verifies status=ACCEPTED and creates STRANGER connection", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "STRANGER",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.type).toBe("STRANGER");
+
+      // Verify connection was created with correct type
+      const connection = await prisma.connections.findFirst({
+        where: {
+          OR: [
+            { requesterId: requester.id, requestedId: requested.id },
+            { requesterId: requested.id, requestedId: requester.id }
+          ]
+        }
+      });
+      expect(connection?.type).toBe("STRANGER");
+    });
+
+    it("successfully accepts FOLLOW request - verifies status=ACCEPTED and creates IS_FOLLOWING connection", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "FOLLOW",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.type).toBe("IS_FOLLOWING");
+
+      // Verify connection was created with correct type (FOLLOW becomes IS_FOLLOWING)
+      const connection = await prisma.connections.findFirst({
+        where: {
+          OR: [
+            { requesterId: requester.id, requestedId: requested.id },
+            { requesterId: requested.id, requestedId: requester.id }
+          ]
+        }
+      });
+      expect(connection?.type).toBe("IS_FOLLOWING");
+    });
+
+    it("successfully accepts request - verifies status=ACCEPTED and UPDATES existing connection type", async () => {
+      const [requester, requested] = await Promise.all([
+        createTestUser(),
+        createTestUser()
+      ]);
+
+      // Create existing STRANGER connection
+      const existingConnection = await createConnection(requester.id, requested.id, "STRANGER");
+
+      // Create ACQUAINTANCE request (upgrade)
+      const connectionRequest = await prisma.connectionRequest.create({
+        data: {
+          requesterId: requester.id,
+          requestedId: requested.id,
+          type: "ACQUAINTANCE",
+          status: "PENDING"
+        }
+      });
+
+      const token = getAuthToken(requested.id);
+      const res = await request(app)
+        .post(`/connections/${connectionRequest.id}/accept`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.type).toBe("ACQUAINTANCE");
+      expect(res.body.connectionId).toBe(existingConnection.id);
+
+      // Verify existing connection was updated
+      const updatedConnection = await prisma.connections.findUnique({
+        where: { id: existingConnection.id }
+      });
+      expect(updatedConnection?.type).toBe("ACQUAINTANCE");
+    });
+  });
 });

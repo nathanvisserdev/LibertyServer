@@ -245,4 +245,120 @@ router.get("/connections/pending/outgoing", auth, async (req, res) => {
   }
 });
 
+// --- POST /connections/:requestId/accept ---
+router.post("/connections/:requestId/accept", auth, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = req.user.id;
+  const { requestId } = req.params;
+
+  // Validate requestId
+  if (!requestId || typeof requestId !== "string") {
+    return res.status(400).send("Invalid requestId");
+  }
+
+  try {
+    // Find the connection request
+    const connectionRequest = await prisma.connectionRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        requester: { select: { id: true, isHidden: true, isBanned: true } },
+        requested: { select: { id: true, isHidden: true, isBanned: true } }
+      }
+    });
+
+    if (!connectionRequest) {
+      return res.status(404).send("Connection request not found");
+    }
+
+    // Verify that the session user is the requested user (can only accept requests made to you)
+    if (connectionRequest.requestedId !== sessionUserId) {
+      return res.status(403).send("You can only accept requests made to you");
+    }
+
+    // Verify request is still pending
+    if (connectionRequest.status !== "PENDING") {
+      return res.status(409).send("Connection request is not pending");
+    }
+
+    // Check if either user is banned or hidden
+    if (connectionRequest.requester.isBanned || connectionRequest.requested.isBanned ||
+        connectionRequest.requester.isHidden || connectionRequest.requested.isHidden) {
+      return res.status(404).send("User not found");
+    }
+
+    // Check for existing block between users (bidirectional)
+    const blockExists = await prisma.blocks.findFirst({
+      where: {
+        OR: [
+          { blockerId: connectionRequest.requesterId, blockedId: connectionRequest.requestedId },
+          { blockerId: connectionRequest.requestedId, blockedId: connectionRequest.requesterId }
+        ]
+      }
+    });
+
+    if (blockExists) {
+      return res.status(404).send("User not found");
+    }
+
+    // Use transaction to update request status and handle connection
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update the connection request status to ACCEPTED
+      const updatedRequest = await tx.connectionRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "ACCEPTED",
+          decidedAt: new Date()
+        }
+      });
+
+      // 2. Check for existing connection (bidirectional)
+      const existingConnection = await tx.connections.findFirst({
+        where: {
+          OR: [
+            { requesterId: connectionRequest.requesterId, requestedId: connectionRequest.requestedId },
+            { requesterId: connectionRequest.requestedId, requestedId: connectionRequest.requesterId }
+          ]
+        }
+      });
+
+      let connection;
+      if (existingConnection) {
+        // Update existing connection with the new type
+        const connectionType = connectionRequest.type === "FOLLOW" ? "IS_FOLLOWING" : connectionRequest.type;
+        connection = await tx.connections.update({
+          where: { id: existingConnection.id },
+          data: {
+            type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+          }
+        });
+      } else {
+        // Create new connection
+        const connectionType = connectionRequest.type === "FOLLOW" ? "IS_FOLLOWING" : connectionRequest.type;
+        connection = await tx.connections.create({
+          data: {
+            requesterId: connectionRequest.requesterId,
+            requestedId: connectionRequest.requestedId,
+            type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+          }
+        });
+      }
+
+      return { updatedRequest, connection };
+    });
+
+    return res.status(200).json({
+      message: "Connection request accepted",
+      requestId: result.updatedRequest.id,
+      connectionId: result.connection.id,
+      type: result.connection.type
+    });
+
+  } catch (error) {
+    console.error("Accept connection request error:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
 export default router;
