@@ -5,6 +5,75 @@ import { auth } from "./misc.js";
 const prisma = new PrismaClient();
 const router = Router();
 
+// --- GET /connections ---
+router.get("/connections", auth, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = req.user.id;
+
+  try {
+    const connectionsList: any[] = [];
+
+    // Fetch all connections where session user is either requester or requested
+    const connections = await prisma.connections.findMany({
+      where: {
+        OR: [
+          { requesterId: sessionUserId },
+          { requestedId: sessionUserId }
+        ]
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            photo: true
+          }
+        },
+        requested: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            photo: true
+          }
+        }
+      },
+      orderBy: {
+        since: 'desc'
+      }
+    });
+
+    // Process each connection to include the other user's info
+    for (const connection of connections) {
+      // Determine which user is the "other" user (not the session user)
+      const isRequester = connection.requesterId === sessionUserId;
+      const otherUser = isRequester ? connection.requested : connection.requester;
+
+      connectionsList.push({
+        id: connection.id,
+        userId: otherUser.id,
+        firstName: otherUser.firstName,
+        lastName: otherUser.lastName,
+        username: otherUser.username,
+        photo: otherUser.photo,
+        type: connection.type,
+        createdAt: connection.since
+      });
+    }
+
+    return res.status(200).json({ connectionsList });
+
+  } catch (error) {
+    console.error("Get connections error:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
 // --- POST /connections/request ---
 router.post("/connections/request", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {

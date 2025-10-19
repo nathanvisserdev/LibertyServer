@@ -98,6 +98,189 @@ describe("connections endpoints", () => {
     await prisma.$disconnect();
   });
 
+  describe("GET /connections", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const res = await request(app)
+        .get("/connections");
+
+      expect(res.status).toBe(401);
+    });
+
+    it("returns empty array when user has no connections", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .get("/connections")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList).toEqual([]);
+    });
+
+    it("returns connections where user is the requester", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      // Create a connection where user1 is the requester
+      await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      const res = await request(app)
+        .get("/connections")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList).toHaveLength(1);
+      expect(res.body.connectionsList[0]).toMatchObject({
+        userId: user2.id,
+        firstName: user2.firstName,
+        lastName: user2.lastName,
+        username: user2.username,
+        type: "ACQUAINTANCE"
+      });
+    });
+
+    it("returns connections where user is the requested", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      // Create a connection where user1 is the requested
+      await prisma.connections.create({
+        data: {
+          requesterId: user2.id,
+          requestedId: user1.id,
+          type: "STRANGER"
+        }
+      });
+
+      const res = await request(app)
+        .get("/connections")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList).toHaveLength(1);
+      expect(res.body.connectionsList[0]).toMatchObject({
+        userId: user2.id,
+        firstName: user2.firstName,
+        lastName: user2.lastName,
+        username: user2.username,
+        type: "STRANGER"
+      });
+    });
+
+    it("returns multiple connections with correct user information", async () => {
+      const [user1, user2, user3] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+      const token = getAuthToken(user1.id);
+
+      // Create multiple connections
+      await Promise.all([
+        prisma.connections.create({
+          data: {
+            requesterId: user1.id,
+            requestedId: user2.id,
+            type: "ACQUAINTANCE"
+          }
+        }),
+        prisma.connections.create({
+          data: {
+            requesterId: user3.id,
+            requestedId: user1.id,
+            type: "IS_FOLLOWING"
+          }
+        })
+      ]);
+
+      const res = await request(app)
+        .get("/connections")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList).toHaveLength(2);
+      
+      // Should contain both connections with the other users' info
+      const userIds = res.body.connectionsList.map((conn: any) => conn.userId);
+      expect(userIds).toContain(user2.id);
+      expect(userIds).toContain(user3.id);
+    });
+
+    it("orders connections by creation date (newest first)", async () => {
+      const [user1, user2, user3] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+      const token = getAuthToken(user1.id);
+
+      // Create connections with different timestamps
+      const firstConnection = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      // Wait a bit to ensure different timestamps
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      const secondConnection = await prisma.connections.create({
+        data: {
+          requesterId: user3.id,
+          requestedId: user1.id,
+          type: "STRANGER"
+        }
+      });
+
+      const res = await request(app)
+        .get("/connections")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList).toHaveLength(2);
+      
+      // Newer connection should be first
+      expect(res.body.connectionsList[0].userId).toBe(user3.id);
+      expect(res.body.connectionsList[1].userId).toBe(user2.id);
+    });
+
+    it("includes all required user fields and connection information", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      const res = await request(app)
+        .get("/connections")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList[0]).toHaveProperty('id');
+      expect(res.body.connectionsList[0]).toHaveProperty('userId');
+      expect(res.body.connectionsList[0]).toHaveProperty('firstName');
+      expect(res.body.connectionsList[0]).toHaveProperty('lastName');
+      expect(res.body.connectionsList[0]).toHaveProperty('username');
+      expect(res.body.connectionsList[0]).toHaveProperty('photo');
+      expect(res.body.connectionsList[0]).toHaveProperty('type');
+      expect(res.body.connectionsList[0]).toHaveProperty('createdAt');
+    });
+  });
+
   describe("POST /connections/request", () => {
     it("returns 400 bad request when requestedId is missing", async () => {
       const user = await createTestUser();
