@@ -586,4 +586,64 @@ router.delete("/connections/:requestId/cancel", auth, async (req, res) => {
   }
 });
 
+// --- DELETE /connections/:id ---
+router.delete("/connections/:id", auth, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = req.user.id;
+  const { id: otherUserId } = req.params;
+
+  // Validate otherUserId
+  if (!otherUserId || typeof otherUserId !== "string" || otherUserId.trim() === "") {
+    return res.status(400).send("Invalid user ID");
+  }
+
+  // Cannot delete connection to yourself
+  if (sessionUserId === otherUserId) {
+    return res.status(400).send("Cannot delete connection to yourself");
+  }
+
+  try {
+    // Check if the other user exists
+    const otherUser = await prisma.users.findUnique({
+      where: { id: otherUserId },
+      select: { id: true, isHidden: true, isBanned: true }
+    });
+
+    if (!otherUser) {
+      return res.status(404).send("User not found");
+    }
+
+    // Find existing connection (bidirectional)
+    const existingConnection = await prisma.connections.findFirst({
+      where: {
+        OR: [
+          { requesterId: sessionUserId, requestedId: otherUserId },
+          { requesterId: otherUserId, requestedId: sessionUserId }
+        ]
+      }
+    });
+
+    if (!existingConnection) {
+      return res.status(404).send("Connection not found");
+    }
+
+    // Delete the connection
+    await prisma.connections.delete({
+      where: { id: existingConnection.id }
+    });
+
+    return res.status(200).json({
+      message: "Connection deleted successfully",
+      deletedConnectionId: existingConnection.id,
+      otherUserId: otherUserId
+    });
+
+  } catch (error) {
+    console.error("Delete connection error:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
 export default router;

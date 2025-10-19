@@ -1962,4 +1962,200 @@ describe("connections endpoints", () => {
       expect(updatedRequest?.status).toBe("CANCELED");
     });
   });
+
+  describe("DELETE /connections/:id", () => {
+    it("returns 401 unauthorized without authentication token", async () => {
+      const user = await createTestUser();
+
+      const res = await request(app)
+        .delete(`/connections/${user.id}`);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 404 not found when user ID is invalid", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .delete("/connections/invalid-id")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("User not found");
+    });
+
+    it("returns 400 bad request when trying to delete connection to yourself", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+
+      const res = await request(app)
+        .delete(`/connections/${user.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Cannot delete connection to yourself");
+    });
+
+    it("returns 404 not found when other user does not exist", async () => {
+      const user = await createTestUser();
+      const token = getAuthToken(user.id);
+      const nonExistentUserId = "non-existent-user-id";
+
+      const res = await request(app)
+        .delete(`/connections/${nonExistentUserId}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("User not found");
+    });
+
+    it("returns 404 not found when connection does not exist", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      // No connection exists between these users
+      const res = await request(app)
+        .delete(`/connections/${user2.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Connection not found");
+    });
+
+    it("successfully deletes ACQUAINTANCE connection type", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      // Create connection where user1 is the requester
+      const connection = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      const res = await request(app)
+        .delete(`/connections/${user2.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        message: "Connection deleted successfully",
+        deletedConnectionId: connection.id,
+        otherUserId: user2.id
+      });
+
+      // Verify connection was deleted from database
+      const deletedConnection = await prisma.connections.findUnique({
+        where: { id: connection.id }
+      });
+      expect(deletedConnection).toBeNull();
+    });
+
+    it("successfully deletes STRANGER connection type", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      // Create connection where user1 is the requested
+      const connection = await prisma.connections.create({
+        data: {
+          requesterId: user2.id,
+          requestedId: user1.id,
+          type: "STRANGER"
+        }
+      });
+
+      const res = await request(app)
+        .delete(`/connections/${user2.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        message: "Connection deleted successfully",
+        deletedConnectionId: connection.id,
+        otherUserId: user2.id
+      });
+
+      // Verify connection was deleted from database
+      const deletedConnection = await prisma.connections.findUnique({
+        where: { id: connection.id }
+      });
+      expect(deletedConnection).toBeNull();
+    });
+
+    it("successfully deletes IS_FOLLOWING connection type", async () => {
+      const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
+      const token = getAuthToken(user1.id);
+
+      // Create IS_FOLLOWING connection
+      const connection = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "IS_FOLLOWING"
+        }
+      });
+
+      const res = await request(app)
+        .delete(`/connections/${user2.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Connection deleted successfully");
+
+      // Verify connection was deleted from database
+      const deletedConnection = await prisma.connections.findUnique({
+        where: { id: connection.id }
+      });
+      expect(deletedConnection).toBeNull();
+    });
+
+    it("does not affect other connections when deleting specific connection", async () => {
+      const [user1, user2, user3] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+      const token = getAuthToken(user1.id);
+
+      // Create multiple connections
+      const connection1 = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      const connection2 = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user3.id,
+          type: "STRANGER"
+        }
+      });
+
+      // Delete connection with user2
+      const res = await request(app)
+        .delete(`/connections/${user2.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+
+      // Verify only the specific connection was deleted
+      const deletedConnection = await prisma.connections.findUnique({
+        where: { id: connection1.id }
+      });
+      expect(deletedConnection).toBeNull();
+
+      // Verify other connection still exists
+      const remainingConnection = await prisma.connections.findUnique({
+        where: { id: connection2.id }
+      });
+      expect(remainingConnection).not.toBeNull();
+      expect(remainingConnection?.type).toBe("STRANGER");
+    });
+  });
 });
