@@ -59,6 +59,133 @@ router.get("/groups", auth, async (req, res) => {
   );
 });
 
+// --- Get Group Members ---
+router.get("/groups/:groupId/members", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+  const groupId = req.params.groupId;
+
+  if (!groupId) {
+    return res.status(400).send("Missing group id");
+  }
+
+  try {
+    // Get group information
+    const group = await prisma.groups.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        groupType: true,
+        isHidden: true,
+        adminId: true
+      }
+    });
+
+    if (!group) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if group is PERSONAL and requester is not the admin
+    if (group.groupType === "PERSONAL" && group.adminId !== userId) {
+      return res.status(403).json({
+        error: "FORBIDDEN",
+        code: "PERSONAL_OWNER_ONLY",
+        message: "Unauthorized users may not access other users personal groups."
+      });
+    }
+
+    // Check requester's membership status
+    const requesterMembership = await prisma.groupRoster.findUnique({
+      where: {
+        userId_groupId: {
+          userId: userId,
+          groupId: groupId
+        }
+      }
+    });
+
+    // If requester is banned
+    if (requesterMembership && requesterMembership.isBanned) {
+      return res.status(403).json({
+        error: "FORBIDDEN",
+        code: "MEMBER_BANNED_FROM_GROUP"
+      });
+    }
+
+    // If requester is non-member and group is hidden
+    if (!requesterMembership && group.isHidden) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if any member has isHidden = true (non-member case)
+    if (!requesterMembership) {
+      const hasHiddenMembers = await prisma.groupRoster.findFirst({
+        where: {
+          groupId: groupId,
+          isHidden: true
+        }
+      });
+
+      if (hasHiddenMembers) {
+        const totalCount = await prisma.groupRoster.count({
+          where: {
+            groupId: groupId,
+            isBanned: false
+          }
+        });
+
+        return res.status(200).json({
+          members: [],
+          totalCount: totalCount,
+          visibility: "HIDDEN"
+        });
+      }
+    }
+
+    // Get all non-banned members
+    const members = await prisma.groupRoster.findMany({
+      where: {
+        groupId: groupId,
+        isBanned: false
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        joinedAt: 'asc'
+      }
+    });
+
+    const totalCount = members.length;
+
+    return res.status(200).json({
+      members: members.map(member => ({
+        membershipId: member.membershipId,
+        userId: member.userId,
+        joinedAt: member.joinedAt,
+        isHidden: member.isHidden,
+        user: member.user
+      })),
+      totalCount: totalCount
+    });
+
+  } catch (error) {
+    console.error("Error fetching group members:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 // --- Join Group Request ---
 router.post("/groups/:id/join", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {

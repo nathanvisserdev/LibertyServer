@@ -743,4 +743,422 @@ describe("groups endpoints", () => {
       expect(res.body.request).toHaveProperty("status", "PENDING");
     });
   });
+
+  describe("GET /groups/:groupId/members", () => {
+    it("requires authentication", async () => {
+      const res = await request(app)
+        .get("/groups/someId/members");
+      
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 400 when group id is missing", async () => {
+      const { token } = await createUserAndGetToken(false);
+      
+      const res = await request(app)
+        .get("/groups//members")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404); // Express treats missing param as not found
+    });
+
+    it("returns 404 when group does not exist", async () => {
+      const { token } = await createUserAndGetToken(false);
+      
+      const res = await request(app)
+        .get("/groups/nonexistent/members")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Group not found");
+    });
+
+    it("returns 403 when trying to access someone else's PERSONAL group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create PERSONAL group owned by admin
+      const group = await prisma.groups.create({
+        data: {
+          name: "Personal Group",
+          groupType: "PERSONAL",
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({
+        error: "FORBIDDEN",
+        code: "PERSONAL_OWNER_ONLY",
+        message: "Unauthorized users may not access other users personal groups."
+      });
+    });
+
+    it("returns 200 when admin accesses their own PERSONAL group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const member = await createUserAndGetToken(false);
+
+      // Create PERSONAL group owned by admin
+      const group = await prisma.groups.create({
+        data: {
+          name: "Personal Group",
+          groupType: "PERSONAL",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add admin and another member to the group
+      await prisma.groupRoster.create({
+        data: {
+          userId: admin.userId,
+          groupId: group.id,
+        },
+      });
+
+      await prisma.groupRoster.create({
+        data: {
+          userId: member.userId,
+          groupId: group.id,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${admin.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("members");
+      expect(res.body).toHaveProperty("totalCount", 2);
+      expect(res.body.members).toHaveLength(2);
+      
+      // Verify member object structure
+      expect(res.body.members[0]).toHaveProperty("membershipId");
+      expect(res.body.members[0]).toHaveProperty("userId");
+      expect(res.body.members[0]).toHaveProperty("joinedAt");
+      expect(res.body.members[0]).toHaveProperty("isHidden");
+      expect(res.body.members[0]).toHaveProperty("user");
+    });
+
+    it("returns 403 when requester is banned from the group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add user as banned member
+      await prisma.groupRoster.create({
+        data: {
+          userId: user.userId,
+          groupId: group.id,
+          isBanned: true,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({
+        error: "FORBIDDEN",
+        code: "MEMBER_BANNED_FROM_GROUP"
+      });
+    });
+
+    it("returns 404 when non-member tries to access hidden group", async () => {
+      const admin = await createUserAndGetToken(true); // Paid user can create hidden groups
+      const user = await createUserAndGetToken(false);
+
+      // Create hidden group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Hidden Group",
+          groupType: "PRIVATE",
+          isHidden: true,
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Group not found");
+    });
+
+    it("returns 200 with hidden visibility when non-member and group has hidden members", async () => {
+      const admin = await createUserAndGetToken(false);
+      const member1 = await createUserAndGetToken(false);
+      const member2 = await createUserAndGetToken(false);
+      const nonMember = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add members - one hidden, one visible
+      await prisma.groupRoster.create({
+        data: {
+          userId: member1.userId,
+          groupId: group.id,
+          isHidden: false,
+        },
+      });
+
+      await prisma.groupRoster.create({
+        data: {
+          userId: member2.userId,
+          groupId: group.id,
+          isHidden: true, // This makes the roster hidden
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${nonMember.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        members: [],
+        totalCount: 2, // Count includes all non-banned members
+        visibility: "HIDDEN"
+      });
+    });
+
+    it("returns 200 with member list when non-member and group roster is not hidden", async () => {
+      const admin = await createUserAndGetToken(false);
+      const member1 = await createUserAndGetToken(false);
+      const member2 = await createUserAndGetToken(false);
+      const bannedMember = await createUserAndGetToken(false);
+      const nonMember = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add visible members
+      await prisma.groupRoster.create({
+        data: {
+          userId: member1.userId,
+          groupId: group.id,
+          isHidden: false,
+        },
+      });
+
+      await prisma.groupRoster.create({
+        data: {
+          userId: member2.userId,
+          groupId: group.id,
+          isHidden: false,
+        },
+      });
+
+      // Add banned member (should not appear in results)
+      await prisma.groupRoster.create({
+        data: {
+          userId: bannedMember.userId,
+          groupId: group.id,
+          isBanned: true,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${nonMember.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("members");
+      expect(res.body).toHaveProperty("totalCount", 2); // Only non-banned members
+      expect(res.body.members).toHaveLength(2);
+      
+      // Verify banned member is not included
+      const memberIds = res.body.members.map((m: any) => m.userId);
+      expect(memberIds).toContain(member1.userId);
+      expect(memberIds).toContain(member2.userId);
+      expect(memberIds).not.toContain(bannedMember.userId);
+
+      // Verify member object structure
+      expect(res.body.members[0]).toHaveProperty("membershipId");
+      expect(res.body.members[0]).toHaveProperty("userId");
+      expect(res.body.members[0]).toHaveProperty("joinedAt");
+      expect(res.body.members[0]).toHaveProperty("isHidden");
+      expect(res.body.members[0]).toHaveProperty("user");
+      expect(res.body.members[0].user).toHaveProperty("id");
+      expect(res.body.members[0].user).toHaveProperty("username");
+      expect(res.body.members[0].user).toHaveProperty("firstName");
+      expect(res.body.members[0].user).toHaveProperty("lastName");
+      expect(res.body.members[0].user).toHaveProperty("email");
+    });
+
+    it("returns members ordered by joinedAt ascending", async () => {
+      const admin = await createUserAndGetToken(false);
+      const member1 = await createUserAndGetToken(false);
+      const member2 = await createUserAndGetToken(false);
+      const nonMember = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add member1 first (earlier date)
+      await prisma.groupRoster.create({
+        data: {
+          userId: member1.userId,
+          groupId: group.id,
+          joinedAt: new Date('2023-01-01'),
+        },
+      });
+
+      // Add member2 later
+      await prisma.groupRoster.create({
+        data: {
+          userId: member2.userId,
+          groupId: group.id,
+          joinedAt: new Date('2023-01-02'),
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${nonMember.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.members).toHaveLength(2);
+      
+      // Verify ordering by joinedAt ascending (earliest first)
+      expect(res.body.members[0].userId).toBe(member1.userId);
+      expect(res.body.members[1].userId).toBe(member2.userId);
+    });
+
+    it("handles empty member list correctly", async () => {
+      const admin = await createUserAndGetToken(false);
+      const nonMember = await createUserAndGetToken(false);
+
+      // Create group with no members
+      const group = await prisma.groups.create({
+        data: {
+          name: "Empty Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${nonMember.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        members: [],
+        totalCount: 0
+      });
+    });
+
+    it("allows members to access member list of groups they belong to", async () => {
+      const admin = await createUserAndGetToken(false);
+      const member = await createUserAndGetToken(false);
+      const otherMember = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PRIVATE",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add members
+      await prisma.groupRoster.create({
+        data: {
+          userId: member.userId,
+          groupId: group.id,
+        },
+      });
+
+      await prisma.groupRoster.create({
+        data: {
+          userId: otherMember.userId,
+          groupId: group.id,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${member.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("members");
+      expect(res.body).toHaveProperty("totalCount", 2);
+      expect(res.body.members).toHaveLength(2);
+    });
+
+    it("excludes banned members from results even for group members", async () => {
+      const admin = await createUserAndGetToken(false);
+      const member = await createUserAndGetToken(false);
+      const bannedMember = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add regular member
+      await prisma.groupRoster.create({
+        data: {
+          userId: member.userId,
+          groupId: group.id,
+        },
+      });
+
+      // Add banned member
+      await prisma.groupRoster.create({
+        data: {
+          userId: bannedMember.userId,
+          groupId: group.id,
+          isBanned: true,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/groups/${group.id}/members`)
+        .set("Authorization", `Bearer ${member.token}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("totalCount", 1); // Only non-banned member
+      expect(res.body.members).toHaveLength(1);
+      expect(res.body.members[0].userId).toBe(member.userId);
+    });
+  });
 });
