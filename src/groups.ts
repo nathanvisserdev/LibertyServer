@@ -59,6 +59,106 @@ router.get("/groups", auth, async (req, res) => {
   );
 });
 
+// --- Join Group Request ---
+router.post("/groups/:id/join", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+  const groupId = req.params.id;
+
+  if (!groupId) {
+    return res.status(400).send("Missing group id");
+  }
+
+  try {
+    // Check if group exists
+    const group = await prisma.groups.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        groupType: true,
+        isHidden: true,
+        adminId: true
+      }
+    });
+
+    if (!group) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if group is hidden
+    if (group.isHidden) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if group is PERSONAL
+    if (group.groupType === "PERSONAL") {
+      // If it's the user's own PERSONAL group, return bad request
+      if (group.adminId === userId) {
+        return res.status(400).send("Cannot request to join your own personal group");
+      }
+      // If it's someone else's PERSONAL group, return not found
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if user is already a member
+    const existingMembership = await prisma.groupRoster.findUnique({
+      where: {
+        userId_groupId: {
+          userId: userId,
+          groupId: groupId
+        }
+      }
+    });
+
+    if (existingMembership) {
+      if (existingMembership.isBanned) {
+        return res.status(403).send("You are banned from this group");
+      }
+      return res.status(409).send("You are already a member of this group");
+    }
+
+    // Check if there's already a pending join request
+    const existingRequest = await prisma.joinGroup.findFirst({
+      where: {
+        groupId: groupId,
+        requesterId: userId,
+        status: "PENDING"
+      }
+    });
+
+    if (existingRequest) {
+      return res.status(409).send("You already have a pending join request for this group");
+    }
+
+    // Create the join request
+    const joinRequest = await prisma.joinGroup.create({
+      data: {
+        groupId: groupId,
+        requesterId: userId,
+        status: "PENDING"
+      },
+      select: {
+        id: true,
+        groupId: true,
+        requesterId: true,
+        status: true,
+        createdAt: true
+      }
+    });
+
+    res.status(201).json({
+      message: "Join request submitted successfully",
+      request: joinRequest
+    });
+  } catch (error) {
+    console.error("Error creating join request:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 // --- Create Group ---
 router.post("/groups", auth, async (req, res) => {
   const { name, description, groupType, isHidden } = req.body ?? {};

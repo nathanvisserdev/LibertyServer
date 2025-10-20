@@ -410,6 +410,7 @@ model GroupRoster {
   userId       String
   groupId      String
   joinedAt     DateTime @default(now())
+  isBanned     Boolean @default(false)
 
   user  Users  @relation(fields: [userId], references: [id])
   group Groups @relation(fields: [groupId], references: [id])

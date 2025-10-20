@@ -509,4 +509,238 @@ describe("groups endpoints", () => {
       expect(res.status).toBe(401);
     });
   });
+
+  describe("POST /groups/:id/join", () => {
+    it("requires authentication", async () => {
+      const res = await request(app)
+        .post("/groups/someId/join");
+      
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 404 when group does not exist", async () => {
+      const { token } = await createUserAndGetToken(false);
+      
+      const res = await request(app)
+        .post("/groups/nonexistent/join")
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Group not found");
+    });
+
+    it("returns 404 when trying to join a hidden group", async () => {
+      const admin = await createUserAndGetToken(true);
+      const user = await createUserAndGetToken(false);
+
+      // Create hidden group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Hidden Group",
+          groupType: "PRIVATE",
+          isHidden: true,
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Group not found");
+    });
+
+    it("returns 400 when trying to join your own PERSONAL group", async () => {
+      const user = await createUserAndGetToken(false);
+
+      // Create PERSONAL group owned by the same user
+      const group = await prisma.groups.create({
+        data: {
+          name: "Personal Group",
+          groupType: "PERSONAL",
+          adminId: user.userId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("Cannot request to join your own personal group");
+    });
+
+    it("returns 404 when trying to join someone else's PERSONAL group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create PERSONAL group owned by admin
+      const group = await prisma.groups.create({
+        data: {
+          name: "Someone's Personal Group",
+          groupType: "PERSONAL",
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Group not found");
+    });
+
+    it("returns 409 when user is already a member", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PRIVATE",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add user as member
+      await prisma.groupRoster.create({
+        data: {
+          userId: user.userId,
+          groupId: group.id,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(409);
+      expect(res.text).toBe("You are already a member of this group");
+    });
+
+    it("returns 403 when user is banned from the group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PRIVATE",
+          adminId: admin.userId,
+        },
+      });
+
+      // Add user as banned member
+      await prisma.groupRoster.create({
+        data: {
+          userId: user.userId,
+          groupId: group.id,
+          isBanned: true,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("You are banned from this group");
+    });
+
+    it("returns 409 when user already has a pending join request", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Test Group",
+          groupType: "PRIVATE",
+          adminId: admin.userId,
+        },
+      });
+
+      // Create pending join request
+      await prisma.joinGroup.create({
+        data: {
+          groupId: group.id,
+          requesterId: user.userId,
+          status: "PENDING",
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(409);
+      expect(res.text).toBe("You already have a pending join request for this group");
+    });
+
+    it("successfully creates a join request for PUBLIC group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create PUBLIC group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Public Test Group",
+          groupType: "PUBLIC",
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty("message", "Join request submitted successfully");
+      expect(res.body).toHaveProperty("request");
+      expect(res.body.request).toHaveProperty("id");
+      expect(res.body.request).toHaveProperty("groupId", group.id);
+      expect(res.body.request).toHaveProperty("requesterId", user.userId);
+      expect(res.body.request).toHaveProperty("status", "PENDING");
+      expect(res.body.request).toHaveProperty("createdAt");
+
+      // Verify in database
+      const joinRequest = await prisma.joinGroup.findFirst({
+        where: {
+          groupId: group.id,
+          requesterId: user.userId,
+        },
+      });
+      expect(joinRequest).toBeTruthy();
+      expect(joinRequest?.status).toBe("PENDING");
+    });
+
+    it("successfully creates a join request for PRIVATE group", async () => {
+      const admin = await createUserAndGetToken(false);
+      const user = await createUserAndGetToken(false);
+
+      // Create PRIVATE group
+      const group = await prisma.groups.create({
+        data: {
+          name: "Private Test Group",
+          groupType: "PRIVATE",
+          adminId: admin.userId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/groups/${group.id}/join`)
+        .set("Authorization", `Bearer ${user.token}`);
+      
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty("message", "Join request submitted successfully");
+      expect(res.body).toHaveProperty("request");
+      expect(res.body.request).toHaveProperty("groupId", group.id);
+      expect(res.body.request).toHaveProperty("requesterId", user.userId);
+      expect(res.body.request).toHaveProperty("status", "PENDING");
+    });
+  });
 });
