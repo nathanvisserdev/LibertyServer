@@ -130,7 +130,7 @@ model Users {
   posts         Posts[]
 
   // group membership
-  groups        GroupRoster[]
+  groups        GroupMember[]
 
   // requests
   outgoingRequests ConnectionRequest[] @relation("req_outgoing")
@@ -175,29 +175,23 @@ model Groups {
   description String?
   createdAt   DateTime  @default(now())
 
-  // visibility & admin
   groupType   GroupPrivacy @default(PRIVATE)
+
   isHidden    Boolean      @default(false)
+  membershipHidden Boolean @default(false)
+
   adminId     String
   admin       Users        @relation("GroupAdmin", fields: [adminId], references: [id])
-
-  // membership approval policy
   groupJoinPolicy GroupJoinPolicy @default(CHAIR)
+  vouchingEnabled Boolean         @default(false)
 
   // foreign key (optional 1:1 RoundTable)
   roundTable  RoundTable?
-
-  // content
   posts       Posts[]
-
-  // roster
-  members     GroupRoster[]
-
-  // group invites and join requests
+  members     GroupMember[]
   invites     GroupInvite[]
   joinRequests JoinGroup[]
 
-  // round table relations
   roundTableMembers    RoundTableMember[]
   roundTableMotions    RoundTableMotion[]
   roundTableLogs       RoundTableLog[]
@@ -300,6 +294,7 @@ model RoundTableMember {
   groupId      String
   userId       String
   role         RoundTableRole @default(CHAIRPERSON) // neutral default; enforce one CHAIR and one VICE_CHAIR in app or raw SQL
+  isModerator  Boolean       @default(false)
   joinedAt     DateTime      @default(now())
   absentUntil  DateTime?
 
@@ -405,13 +400,12 @@ model Posts {
   @@index([groupId])
 }
 
-model GroupRoster {
+model GroupMember {
   membershipId String   @id @default(cuid())
   userId       String
   groupId      String
   joinedAt     DateTime @default(now())
   isBanned     Boolean @default(false)
-  isHidden     Boolean @default(false)
 
   user  Users  @relation(fields: [userId], references: [id])
   group Groups @relation(fields: [groupId], references: [id])

@@ -4,13 +4,16 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
+import { generateUniqueEmail, generateUniqueUsername, generateTestNamespace, generateUniqueString, generateUniqueUsernameWithPrefix } from './testUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
-const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+const testNamespace = generateTestNamespace(testFileName);
 
 const prisma = new PrismaClient();
+
+// Simple counter for unique names
+let nameCounter = 1;
 
 // Helper function to create a user and get token
 async function createUserAndGetToken(
@@ -124,19 +127,19 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create a user with specific username
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      const searchableUser = await createUserAndGetToken(false, { username: `johndoe${uniqueId}` });
+      const uniqueId = generateUniqueUsernameWithPrefix("johndoe");
+      const searchableUser = await createUserAndGetToken(false, { username: uniqueId });
       
       const res = await request(app)
         .get("/search/users")
         .set("Authorization", `Bearer ${token}`)
-        .query({ q: `johndoe${uniqueId}` });
+        .query({ q: uniqueId });
       
       expect(res.status).toBe(200);
       expect(res.body.users).toHaveLength(1);
       expect(res.body.users[0]).toMatchObject({
         id: searchableUser.userId,
-        username: `johndoe${uniqueId}`,
+        username: uniqueId,
         firstName: "Test",
         lastName: "User"
       });
@@ -147,14 +150,15 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create a user with very specific unique name that won't match others
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      const firstName = `Alicexyz${uniqueId}`;
-      const lastName = `Johnsonxyz${uniqueId}`;
+      const firstName = `Alice${nameCounter}`;
+      const lastName = `Johnson${nameCounter}`;
+      const username = generateUniqueUsernameWithPrefix("alice");
+      nameCounter++;
       
       await createUserAndGetToken(false, { 
         firstName, 
         lastName,
-        username: `alice_j${uniqueId}` 
+        username 
       });
       
       const res = await request(app)
@@ -166,11 +170,11 @@ describe("search endpoints", () => {
       expect(res.body.users.length).toBeGreaterThan(0);
       
       // Find our specific user in the results
-      const foundUser = res.body.users.find((u: any) => u.username === `alice_j${uniqueId}`);
+      const foundUser = res.body.users.find((u: any) => u.username === username);
       expect(foundUser).toMatchObject({
         firstName,
         lastName,
-        username: `alice_j${uniqueId}`
+        username
       });
     });
 
@@ -178,14 +182,15 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create a user with very specific unique name that won't match others
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      const firstName = `Bobxyz${uniqueId}`;
-      const lastName = `Smithxyz${uniqueId}`;
+      const firstName = `Bob${nameCounter}`;
+      const lastName = `Smith${nameCounter}`;
+      const username = generateUniqueUsernameWithPrefix("bobsmith");
+      nameCounter++;
       
       await createUserAndGetToken(false, { 
         firstName,
         lastName,
-        username: `bobsmith${uniqueId}` 
+        username
       });
       
       const res = await request(app)
@@ -197,11 +202,11 @@ describe("search endpoints", () => {
       expect(res.body.users.length).toBeGreaterThan(0);
       
       // Find our specific user in the results
-      const foundUser = res.body.users.find((u: any) => u.username === `bobsmith${uniqueId}`);
+      const foundUser = res.body.users.find((u: any) => u.username === username);
       expect(foundUser).toMatchObject({
         firstName,
         lastName,
-        username: `bobsmith${uniqueId}`
+        username
       });
     });
 
@@ -209,8 +214,8 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create a user and then ban them
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      const bannedUser = await createUserAndGetToken(false, { username: `banneduser${uniqueId}` });
+      const uniqueId = generateUniqueUsernameWithPrefix("banneduser");
+      const bannedUser = await createUserAndGetToken(false, { username: uniqueId });
       await prisma.users.update({
         where: { id: bannedUser.userId },
         data: { isBanned: true }
@@ -219,7 +224,7 @@ describe("search endpoints", () => {
       const res = await request(app)
         .get("/search/users")
         .set("Authorization", `Bearer ${token}`)
-        .query({ q: `banneduser${uniqueId}` });
+        .query({ q: uniqueId });
       
       expect(res.status).toBe(200);
       expect(res.body.users).toHaveLength(0);
@@ -229,8 +234,7 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create a group with unique name
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      const groupName = `JavaScript Developers ${uniqueId}`;
+      const groupName = generateUniqueString("JavaScript Developers", testNamespace);
       const groupRes = await request(app)
         .post("/groups")
         .set("Authorization", `Bearer ${token}`)
@@ -353,7 +357,7 @@ describe("search endpoints", () => {
       const groupId = groupRes.body.id;
       
       // Add member to the group
-      await prisma.groupRoster.create({
+      await prisma.groupMember.create({
         data: {
           userId: memberId,
           groupId: groupId
@@ -378,8 +382,7 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create a user and group with unique search term
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      const searchTerm = `unique${uniqueId}`;
+      const searchTerm = generateUniqueUsernameWithPrefix("unique");
       
       await createUserAndGetToken(false, { username: `${searchTerm}user` });
       
@@ -430,21 +433,21 @@ describe("search endpoints", () => {
       const { token } = await createUserAndGetToken();
       
       // Create user with specific username
-      const uniqueId = Date.now() + Math.floor(Math.random() * 10000);
-      await createUserAndGetToken(false, { username: `singletoken${uniqueId}` });
+      const uniqueId = generateUniqueUsernameWithPrefix("singletoken");
+      await createUserAndGetToken(false, { username: uniqueId });
       
       const res = await request(app)
         .get("/search/users")
         .set("Authorization", `Bearer ${token}`)
-        .query({ q: `singletoken${uniqueId}` }); // Single token
+        .query({ q: uniqueId }); // Single token
       
       expect(res.status).toBe(200);
       expect(res.body.users.length).toBeGreaterThan(0);
       
       // Find our specific user in the results
-      const foundUser = res.body.users.find((u: any) => u.username === `singletoken${uniqueId}`);
+      const foundUser = res.body.users.find((u: any) => u.username === uniqueId);
       expect(foundUser).toBeDefined();
-      expect(foundUser.username).toBe(`singletoken${uniqueId}`);
+      expect(foundUser.username).toBe(uniqueId);
     });
   });
 });

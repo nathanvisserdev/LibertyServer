@@ -289,7 +289,7 @@ router.delete("/user/me", auth, async (req, res) => {
       if (personal.length) {
         const ids = personal.map(g => g.id);
         await tx.posts.deleteMany({ where: { groupId: { in: ids } } });
-        await tx.groupRoster.deleteMany({ where: { groupId: { in: ids } } });
+        await tx.groupMember.deleteMany({ where: { groupId: { in: ids } } });
         await tx.groups.deleteMany({ where: { id: { in: ids } } });
       }
 
@@ -297,7 +297,7 @@ router.delete("/user/me", auth, async (req, res) => {
       if (force && adminGroups.length) {
         const ids = adminGroups.map(g => g.id);
         await tx.posts.deleteMany({ where: { groupId: { in: ids } } });
-        await tx.groupRoster.deleteMany({ where: { groupId: { in: ids } } });
+        await tx.groupMember.deleteMany({ where: { groupId: { in: ids } } });
         await tx.groups.deleteMany({ where: { id: { in: ids } } });
       }
 
@@ -307,7 +307,7 @@ router.delete("/user/me", auth, async (req, res) => {
       await tx.connections.deleteMany({ where: { requesterId: me } });
       await tx.connections.deleteMany({ where: { requestedId: me } });
       await tx.blocks.deleteMany({ where: { OR: [{ blockerId: me }, { blockedId: me }] } });
-      await tx.groupRoster.deleteMany({ where: { userId: me } });
+      await tx.groupMember.deleteMany({ where: { userId: me } });
       await tx.posts.deleteMany({ where: { userId: me } });
 
       // Finally, delete the user

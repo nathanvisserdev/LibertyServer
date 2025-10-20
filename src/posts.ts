@@ -41,7 +41,7 @@ router.post("/posts", auth, async (req, res) => {
 
     // Membership required for PRIVATE or PERSONAL; PUBLIC can be open-post (policy choice)
     if (group.groupType === "PRIVATE" || group.groupType === "PERSONAL") {
-      const member = await prisma.groupRoster.findUnique({
+      const member = await prisma.groupMember.findUnique({
         where: { userId_groupId: { userId: me.id, groupId: group.id } },
         select: { membershipId: true },
       });
@@ -49,7 +49,7 @@ router.post("/posts", auth, async (req, res) => {
     }
     // PUBLIC group posts require membership as well (policy choice)
     else {
-      const member = await prisma.groupRoster.findUnique({
+      const member = await prisma.groupMember.findUnique({
         where: { userId_groupId: { userId: me.id, groupId: group.id } },
         select: { membershipId: true },
       });

@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 const router = Router();
 
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
-const JWT_SECRET = process.env.JWT_SECRET ?? "";
+const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === 'test' ? 'test-jwt-secret' : '');
 if (!JWT_SECRET) throw new Error("Missing JWT_SECRET in .env");
 
 // --- Signup (email + password + firstName + lastName + username) ---
@@ -51,9 +51,9 @@ router.post("/signup", async (req, res) => {
 
   // Validate username format and length
   const usernameStr = String(username).toLowerCase().trim();
-  const usernameRegex = /^[a-z0-9_.]{3,32}$/;
+  const usernameRegex = /^[a-z0-9_.]{3,100}$/;
   if (!usernameRegex.test(usernameStr)) {
-    return res.status(400).json({ error: "Username must be 3-32 characters and contain only lowercase letters, numbers, underscores, and periods" });
+    return res.status(400).json({ error: "Username must be 3-100 characters and contain only lowercase letters, numbers, underscores, and periods" });
   }
 
   try {
@@ -92,8 +92,8 @@ router.post("/signup", async (req, res) => {
         },
       });
 
-      // 3. Add user to their own group via GroupRoster
-      await tx.groupRoster.create({
+      // 3. Add user to their own group via GroupMember
+      await tx.groupMember.create({
         data: {
           userId: user.id,
           groupId: group.id,

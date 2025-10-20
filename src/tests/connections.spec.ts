@@ -4,12 +4,12 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
+import { generateUniqueEmail, generateUniqueUsername, generateTestNamespace } from './testUtils.js';
 import jwt from "jsonwebtoken";
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
-const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+const testNamespace = generateTestNamespace(testFileName);
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET ?? "";
@@ -222,11 +222,13 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create connections with different timestamps
+      const now = new Date();
       const firstConnection = await prisma.connections.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
-          type: "ACQUAINTANCE"
+          type: "ACQUAINTANCE",
+          since: new Date(now.getTime() - 1000) // 1 second ago
         }
       });
 
@@ -237,7 +239,8 @@ describe("connections endpoints", () => {
         data: {
           requesterId: user3.id,
           requestedId: user1.id,
-          type: "STRANGER"
+          type: "STRANGER",
+          since: new Date() // Current time (newer)
         }
       });
 

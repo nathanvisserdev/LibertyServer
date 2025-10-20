@@ -4,11 +4,11 @@ import { app } from "../index.js";
 import { PrismaClient } from "../generated/prisma/index.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { generateUniqueEmail, generateUniqueUsername } from './testUtils.js';
+import { generateUniqueEmail, generateUniqueUsername, generateTestNamespace } from './testUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
-const testNamespace = `${testFileName}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+const testNamespace = generateTestNamespace(testFileName);
 
 const prisma = new PrismaClient();
 
@@ -93,7 +93,7 @@ describe("auth endpoints", () => {
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
-    expect(res.body.error).toContain("Username must be 3-32 characters");
+    expect(res.body.error).toContain("Username must be 3-100 characters");
   });
 
   it("signup: 400 bad request when isPaid field is present", async () => {

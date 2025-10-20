@@ -14,49 +14,243 @@ router.get("/groups", auth, async (req, res) => {
   const me = req.user as any;
   const userId = me.id;
 
-  // Get all groups with admin and membership information
-  const groups = await prisma.groups.findMany({ 
-    include: { 
-      admin: true,
-      members: {
-        where: { userId: userId },
-        select: { userId: true }
-      }
-    } 
-  });
+  try {
+    // Get all groups with admin and membership information
+    const groups = await prisma.groups.findMany({ 
+      include: { 
+        admin: true,
+        members: {
+          where: { userId: userId },
+          select: { userId: true }
+        }
+      } 
+    });
 
-  // Filter groups based on visibility rules
-  const filteredGroups = groups.filter(g => {
-    // Filter out PERSONAL groups where the requester is not the admin
-    if (g.groupType === "PERSONAL" && g.adminId !== userId) {
-      return false;
-    }
-
-    // Filter out hidden groups unless the requester is admin or member
-    if (g.isHidden) {
-      const isAdmin = g.adminId === userId;
-      const isMember = g.members.length > 0; // User is a member if found in members array
-      
-      if (!isAdmin && !isMember) {
+    // Filter groups based on visibility rules
+    const filteredGroups = groups.filter(g => {
+      // Safety checks
+      if (!g || !g.adminId || !g.groupType) {
         return false;
       }
+
+      // Filter out PERSONAL groups where the requester is not the admin
+      if (g.groupType === "PERSONAL" && g.adminId !== userId) {
+        return false;
+      }
+
+      // Filter out hidden groups unless the requester is admin or member
+      if (g.isHidden) {
+        const isAdmin = g.adminId === userId;
+        const isMember = (g.members && g.members.length > 0) || false; // User is a member if found in members array
+        
+        if (!isAdmin && !isMember) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Apply displayLabel logic and remove members array from response
+    res.json(
+      filteredGroups.map(g => {
+        const { members, ...groupWithoutMembers } = g || {};
+        
+        // Safety check for group name
+        const groupName = g?.name || "Unknown Group";
+        
+        if (g?.groupType === "PUBLIC")
+          return { ...groupWithoutMembers, displayLabel: `${groupName} public assembly room` };
+        if (g?.groupType === "PRIVATE")
+          return { ...groupWithoutMembers, displayLabel: `${groupName} private assembly room` };
+        return { ...groupWithoutMembers, displayLabel: "Social Circle" };
+      })
+    );
+  } catch (error) {
+    console.error("Error in GET /groups:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- Get Groups with Mutual Connections ---
+router.get("/groups/mutuals", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+
+  try {
+    // Get user's connections (all types: ACQUAINTANCE, STRANGER, IS_FOLLOWING)
+    const connections = await prisma.connections.findMany({
+      where: {
+        OR: [
+          { requesterId: userId },
+          { requestedId: userId }
+        ]
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            isHidden: true,
+            isBanned: true
+          }
+        },
+        requested: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            isHidden: true,
+            isBanned: true
+          }
+        }
+      }
+    });
+
+    // Extract connection user IDs (excluding current user)
+    const connectionUserIds = connections
+      .map(conn => conn.requesterId === userId ? conn.requestedId : conn.requesterId)
+      .filter(id => id !== userId);
+
+    if (connectionUserIds.length === 0) {
+      return res.json([]);
     }
 
-    return true;
-  });
+    // Get blocks to filter out blocked users
+    const blocks = await prisma.blocks.findMany({
+      where: {
+        OR: [
+          { blockerId: userId },
+          { blockedId: userId }
+        ]
+      }
+    });
 
-  // Apply displayLabel logic and remove members array from response
-  res.json(
-    filteredGroups.map(g => {
-      const { members, ...groupWithoutMembers } = g;
+    const blockedUserIds = new Set(
+      blocks.map(block => 
+        block.blockerId === userId ? block.blockedId : block.blockerId
+      )
+    );
+
+    // Filter connections to exclude hidden, banned, or blocked users
+    const validConnectionUserIds = connectionUserIds.filter(connId => {
+      if (blockedUserIds.has(connId)) return false;
       
-      if (g.groupType === "PUBLIC")
-        return { ...groupWithoutMembers, displayLabel: `${g.name} public assembly room` };
-      if (g.groupType === "PRIVATE")
-        return { ...groupWithoutMembers, displayLabel: `${g.name} private assembly room` };
-      return { ...groupWithoutMembers, displayLabel: "Social Circle" };
-    })
-  );
+      const connection = connections.find(conn => 
+        (conn.requesterId === userId && conn.requestedId === connId) ||
+        (conn.requestedId === userId && conn.requesterId === connId)
+      );
+      
+      if (!connection) return false;
+      
+      const connectedUser = connection.requesterId === userId ? connection.requested : connection.requester;
+      
+      // Exclude hidden or banned users
+      if (connectedUser.isHidden || connectedUser.isBanned) return false;
+      
+      return true;
+    });
+
+    if (validConnectionUserIds.length === 0) {
+      return res.json([]);
+    }
+
+    // Get groups where user is not banned
+    const userBannedGroups = await prisma.groupMember.findMany({
+      where: {
+        userId: userId,
+        isBanned: true
+      },
+      select: { groupId: true }
+    });
+
+    const bannedGroupIds = new Set(userBannedGroups.map(roster => roster.groupId));
+
+    // Find groups that have valid connections as members
+    const groupsWithMembers = await prisma.groups.findMany({
+      where: {
+        AND: [
+          { isHidden: false },
+          { membershipHidden: false },
+          { groupType: { notIn: ["PERSONAL"] } }, // Exclude personal groups
+          { 
+            NOT: {
+              id: { in: Array.from(bannedGroupIds) }
+            }
+          },
+          {
+            members: {
+              some: {
+                userId: { in: validConnectionUserIds },
+                isBanned: false
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        members: {
+          where: {
+            userId: { in: validConnectionUserIds },
+            isBanned: false
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            members: {
+              where: {
+                isBanned: false
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Format the response
+    const result = groupsWithMembers.map(group => ({
+      id: group.id,
+      name: group.name,
+      description: group.description,
+      groupType: group.groupType,
+      createdAt: group.createdAt,
+      adminId: group.adminId,
+      memberCount: group._count.members,
+      mutualConnections: group.members.map(member => ({
+        membershipId: member.membershipId,
+        userId: member.userId,
+        joinedAt: member.joinedAt,
+        user: member.user
+      }))
+    }));
+
+    // Sort by member count (ascending - least to most)
+    result.sort((a, b) => a.memberCount - b.memberCount);
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching mutual groups:", error);
+    res.status(500).send("Internal server error");
+  }
 });
 
 // --- Get Group Members ---
@@ -80,6 +274,7 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
         id: true,
         groupType: true,
         isHidden: true,
+        membershipHidden: true,
         adminId: true
       }
     });
@@ -98,7 +293,7 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
     }
 
     // Check requester's membership status
-    const requesterMembership = await prisma.groupRoster.findUnique({
+    const requesterMembership = await prisma.groupMember.findUnique({
       where: {
         userId_groupId: {
           userId: userId,
@@ -120,33 +315,24 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
       return res.status(404).send("Group not found");
     }
 
-    // Check if any member has isHidden = true (non-member case)
-    if (!requesterMembership) {
-      const hasHiddenMembers = await prisma.groupRoster.findFirst({
+    // Check if membership is hidden for non-members
+    if (!requesterMembership && group.membershipHidden) {
+      const totalCount = await prisma.groupMember.count({
         where: {
           groupId: groupId,
-          isHidden: true
+          isBanned: false
         }
       });
 
-      if (hasHiddenMembers) {
-        const totalCount = await prisma.groupRoster.count({
-          where: {
-            groupId: groupId,
-            isBanned: false
-          }
-        });
-
-        return res.status(200).json({
-          members: [],
-          totalCount: totalCount,
-          visibility: "HIDDEN"
-        });
-      }
+      return res.status(200).json({
+        members: [],
+        totalCount: totalCount,
+        visibility: "HIDDEN"
+      });
     }
 
     // Get all non-banned members
-    const members = await prisma.groupRoster.findMany({
+    const members = await prisma.groupMember.findMany({
       where: {
         groupId: groupId,
         isBanned: false
@@ -174,7 +360,6 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
         membershipId: member.membershipId,
         userId: member.userId,
         joinedAt: member.joinedAt,
-        isHidden: member.isHidden,
         user: member.user
       })),
       totalCount: totalCount
@@ -231,7 +416,7 @@ router.post("/groups/:id/join", auth, async (req, res) => {
     }
 
     // Check if user is already a member
-    const existingMembership = await prisma.groupRoster.findUnique({
+    const existingMembership = await prisma.groupMember.findUnique({
       where: {
         userId_groupId: {
           userId: userId,
@@ -362,7 +547,7 @@ router.get("/groups/:id/room", auth, async (req, res) => {
 
   if (g.groupType === "PERSONAL") return res.status(404).send("no room for social circle");
   if (g.groupType === "PRIVATE") {
-    const member = await prisma.groupRoster.findUnique({
+    const member = await prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: me, groupId: g.id } },
     });
     if (!member) return res.sendStatus(403);
@@ -374,6 +559,82 @@ router.get("/groups/:id/room", auth, async (req, res) => {
         ? `${g.name} public assembly room`
         : `${g.name} private assembly room`,
   });
+});
+
+// --- Get Pending Join Requests for Group ---
+router.get("/groups/:groupId/join-requests/pending", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+  const groupId = req.params.groupId;
+
+  if (!groupId || groupId.trim() === '') {
+    return res.status(400).send("Group ID is required");
+  }
+
+  try {
+    // Check if user is a member of the group
+    const groupMember = await prisma.groupMember.findUnique({
+      where: {
+        userId_groupId: {
+          userId: userId,
+          groupId: groupId
+        }
+      }
+    });
+
+    // If not a member, return 404
+    if (!groupMember) {
+      return res.status(404).send("Not found");
+    }
+
+    // If member is banned, return 403
+    if (groupMember.isBanned) {
+      return res.status(403).send("Forbidden");
+    }
+
+    // Check if user is a moderator in the RoundTable
+    const roundTableMember = await prisma.roundTableMember.findFirst({
+      where: {
+        userId: userId,
+        groupId: groupId
+      }
+    });
+
+    // If not in RoundTable or not a moderator, return 403
+    if (!roundTableMember || !roundTableMember.isModerator) {
+      return res.status(403).send("Forbidden");
+    }
+
+    // Get pending join requests for the group
+    const pendingRequests = await prisma.joinGroup.findMany({
+      where: {
+        groupId: groupId,
+        status: "PENDING"
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json(pendingRequests);
+  } catch (error) {
+    console.error("Error fetching pending join requests:", error);
+    res.status(500).send("Internal server error");
+  }
 });
 
 export default router;
