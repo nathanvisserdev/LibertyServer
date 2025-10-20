@@ -2,7 +2,7 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { PrismaClient, GroupType } from "./generated/prisma/index.js";
+import { PrismaClient, GroupPrivacy } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
 
 const prisma = new PrismaClient();

@@ -8,17 +8,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum RequestStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  CANCELED
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
 }
 
 enum RequestType {
   ACQUAINTANCE
   STRANGER
   FOLLOW
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
 }
 
 enum ConnectionType {
@@ -28,16 +35,67 @@ enum ConnectionType {
 }
 
 enum GroupType {
+  AUTOCRATIC
+  ROUND_TABLE
+}
+
+enum GroupPrivacy {
   PUBLIC     // General Assembly
   PRIVATE    // Assembly Room
   PERSONAL   // Social Circle (owner = admin)
 }
 
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
-  PREFER_NOT_TO_SAY
+enum GroupJoinPolicy {
+  CHAIR          // only group admin approves (The chair)
+  CHAIR_PEOPLE    // chairs (if RoundTable exists) and the chair approves
+}
+
+enum RoundTableRole {
+  CHAIR
+  VICE_CHAIR
+  CHAIRMAN
+  CHAIRWOMAN
+  CHAIRPERSON
+}
+
+enum ElectionCycle {
+  SIX_MONTHS
+  ONE_YEAR
+  TWO_YEARS
+  FOUR_YEARS
+}
+
+enum UnilateralAction {
+  CHAIR_RELINQUISHED
+  SETTINGS_CHANGED
+}
+
+enum RepresentativeAction {
+  REPRESENTATIVE_ABSENT
+  REPRESENTATIVE_RETURNED
+}
+
+enum ConsensusAction {
+  BAN_ENACTED
+  BAN_REVOKED
+  CHAIR_ELECTED
+  VICE_CHAIR_ELECTED
+  ELECTIONS_ENABLED
+  ELECTION_CYCLE_CHANGED
+}
+
+enum MotionType {
+  ELECTION_ENABLE
+  ELECTION_CYCLE_CHANGE
+  CHAIR_REELECTION_DUE_TO_ABSENCE
+  REMOVE_REPRESENTATIVE
+  GENERAL
+}
+
+enum VoteChoice {
+  YES
+  NO
+  ABSTAIN
 }
 
 enum PostVisibility {
@@ -89,6 +147,25 @@ model Users {
   // groups this user administers
   adminGroups Groups[] @relation("GroupAdmin")
 
+  // group invites and join requests
+  sentInvites     GroupInvite[] @relation("Invite_Inviter")
+  receivedInvites GroupInvite[] @relation("Invite_Invitee")
+  decidedInvites  GroupInvite[] @relation("Invite_Decider")
+  vouchedInvites  GroupInvite[] @relation("Invite_Voucher")
+
+  joinRequests           JoinGroup[] @relation("Join_Requester")
+  decidedJoinRequests    JoinGroup[] @relation("Join_Decider")
+  preferredReviewerFor   JoinGroup[] @relation("Join_PreferredReviewer")
+  vouchedJoinRequests    JoinGroup[] @relation("Join_Voucher")
+
+  // round table relations
+  roundTableAdmin     RoundTable[] @relation("RoundTable_Admin")
+  roundTableViceChair RoundTable[] @relation("RoundTable_Vice")
+  roundTableMemberships RoundTableMember[]
+  roundTableMotionsCreated RoundTableMotion[]
+  roundTableLogs      RoundTableLog[]
+  roundTableContinuity RoundTableContinuity[]
+
   @@index([isPaid])
 }
 
@@ -99,20 +176,217 @@ model Groups {
   createdAt   DateTime  @default(now())
 
   // visibility & admin
-  groupType GroupType @default(PRIVATE)
-  isHidden  Boolean   @default(false)
-  adminId   String
-  admin     Users     @relation("GroupAdmin", fields: [adminId], references: [id])
+  groupType   GroupPrivacy @default(PRIVATE)
+  isHidden    Boolean      @default(false)
+  adminId     String
+  admin       Users        @relation("GroupAdmin", fields: [adminId], references: [id])
+
+  // membership approval policy
+  groupJoinPolicy GroupJoinPolicy @default(CHAIR)
+
+  // foreign key (optional 1:1 RoundTable)
+  roundTable  RoundTable?
 
   // content
-  posts Posts[]
+  posts       Posts[]
 
   // roster
-  members GroupRoster[]
+  members     GroupRoster[]
+
+  // group invites and join requests
+  invites     GroupInvite[]
+  joinRequests JoinGroup[]
+
+  // round table relations
+  roundTableMembers    RoundTableMember[]
+  roundTableMotions    RoundTableMotion[]
+  roundTableLogs       RoundTableLog[]
+  roundTableContinuity RoundTableContinuity[]
 
   @@index([groupType])
   @@index([adminId])
   @@unique([adminId, name])
+}
+
+model GroupInvite {
+  id          String        @id @default(cuid())
+  groupId     String
+  inviteeId   String
+  inviterId   String
+  status      RequestStatus @default(PENDING) // PENDING → ACCEPTED | DECLINED | CANCELED
+  createdAt   DateTime      @default(now())
+  decidedAt   DateTime?
+  decidedById String?
+
+  // Optional vouching
+  voucherId   String?
+  vouchStatus RequestStatus? @default(ACCEPTED)
+  vouchNote   String?
+
+  group       Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitee     Users  @relation("Invite_Invitee",  fields: [inviteeId],   references: [id], onDelete: Cascade)
+  inviter     Users  @relation("Invite_Inviter",  fields: [inviterId],   references: [id])
+  decidedBy   Users? @relation("Invite_Decider",  fields: [decidedById], references: [id])
+  voucher     Users? @relation("Invite_Voucher",  fields: [voucherId],   references: [id])
+
+  @@index([groupId, status, createdAt])
+  @@index([inviteeId, status])
+  @@index([inviterId])
+  @@index([voucherId, vouchStatus])
+  @@unique([groupId, inviteeId])
+}
+
+model JoinGroup {
+  id                  String        @id @default(cuid())
+  groupId             String
+  requesterId         String
+  status              RequestStatus @default(PENDING) // PENDING → ACCEPTED | DECLINED | CANCELED
+  createdAt           DateTime      @default(now())
+  decidedAt           DateTime?
+  decidedById         String?
+
+  // Routing + vouching
+  preferredReviewerId String?
+  voucherId           String?
+  vouchStatus         RequestStatus?
+  vouchNote           String?
+  relationshipType    ConnectionType?
+
+  group              Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester          Users  @relation("Join_Requester",          fields: [requesterId],         references: [id], onDelete: Cascade)
+  decidedBy          Users? @relation("Join_Decider",            fields: [decidedById],         references: [id])
+  preferredReviewer  Users? @relation("Join_PreferredReviewer",  fields: [preferredReviewerId], references: [id])
+  voucher            Users? @relation("Join_Voucher",            fields: [voucherId],           references: [id])
+
+  @@index([groupId, status, createdAt])
+  @@index([requesterId, status])
+  @@index([preferredReviewerId])
+  @@index([voucherId, vouchStatus])
+}
+
+model RoundTable {
+  // 1:1 to Groups; not all groups have one
+  groupId                String   @id
+  group                  Groups   @relation(fields: [groupId], references: [id])
+
+  // Round table roles
+  adminId                String
+  admin                  Users    @relation("RoundTable_Admin", fields: [adminId], references: [id])
+  viceChairId            String?
+  viceChair              Users?   @relation("RoundTable_Vice", fields: [viceChairId], references: [id])
+
+  // Round table type
+  roundTableType         GroupType        @default(AUTOCRATIC) // AUTOCRATIC vs ROUND_TABLE
+
+  // settings
+  electionsEnabled       Boolean          @default(false)      // app-enforced monotonic
+  electionCycle         ElectionCycle?
+  absentDaysThreshold    Int              @default(5)
+  inactiveAdminVoteDays  Int              @default(30)
+
+  // relations
+  roundTableMembers      RoundTableMember[]
+  continuity             RoundTableContinuity[]
+  roundTableLogs         RoundTableLog[]
+  motions                RoundTableMotion[]
+
+  @@index([adminId])
+  @@index([viceChairId])
+  @@index([roundTableType])
+}
+
+model RoundTableMember {
+  id           String        @id @default(cuid())
+  groupId      String
+  userId       String
+  role         RoundTableRole @default(CHAIRPERSON) // neutral default; enforce one CHAIR and one VICE_CHAIR in app or raw SQL
+  joinedAt     DateTime      @default(now())
+  absentUntil  DateTime?
+
+  // Planned leave (max 1y)
+  plannedLeaveFrom  DateTime?
+  plannedLeaveUntil DateTime?
+  plannedLeaveNote  String?
+
+  roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  Users  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+  votes RoundTableVote[]
+
+  @@unique([groupId, userId])
+  @@index([groupId, role])
+}
+
+model RoundTableMotion {
+  id          String      @id @default(cuid())
+  groupId     String
+  type        MotionType
+  title       String
+  details     String?
+  createdById String?             // null if system-triggered
+  showPublic  Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  closesAt    DateTime?
+  closedAt    DateTime?
+  passed      Boolean?
+
+  roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
+  group   Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator Users? @relation(fields: [createdById], references: [id])
+  votes   RoundTableVote[]
+
+  @@index([groupId, type, createdAt])
+}
+
+model RoundTableVote {
+  id        String   @id @default(cuid())
+  motionId  String
+  voterId   String
+  choice    VoteChoice
+  createdAt DateTime  @default(now())
+
+  motion RoundTableMotion @relation(fields: [motionId], references: [id], onDelete: Cascade)
+  voter  RoundTableMember @relation(fields: [voterId], references: [id])
+
+  @@unique([motionId, voterId])
+  @@index([voterId])
+}
+
+// ===== Logging (split actions; exactly one non-null enforced in app) =====
+model RoundTableLog {
+  id        String            @id @default(cuid())
+  groupId   String
+  actorId   String?           // who performed or proposed; null for system
+  unilateral UnilateralAction?
+  consensus  ConsensusAction?
+  targetId  String?           // optional subject (e.g., affected user)
+  details   String?           // minimal reason code / hash; avoid PII
+  createdAt DateTime          @default(now())
+
+  roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  actor Users? @relation(fields: [actorId], references: [id])
+
+  @@index([groupId, createdAt])
+  @@index([groupId, unilateral])
+  @@index([groupId, consensus])
+}
+
+// ===== Round table continuity plan =====
+model RoundTableContinuity {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  rank      Int      // 1 = first in line after VICE; auto-maintained from 4th admin onward
+  createdAt DateTime @default(now())
+
+  roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  Users  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@unique([groupId, rank])
+  @@unique([groupId, userId])
+  @@index([groupId])
 }
 
 model Posts {

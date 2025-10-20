@@ -1,6 +1,6 @@
 
 import { Router } from "express";
-import { PrismaClient, GroupType, PostVisibility } from "./generated/prisma/index.js";
+import { PrismaClient, GroupPrivacy, PostVisibility } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
 
 const prisma = new PrismaClient();

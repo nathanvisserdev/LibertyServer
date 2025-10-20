@@ -1,74 +1,10 @@
 
 import { Router } from "express";
-import { PrismaClient, GroupType } from "./generated/prisma/index.js";
+import { PrismaClient, GroupPrivacy } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
 
 const prisma = new PrismaClient();
 const router = Router();
-
-// --- Create Group ---
-router.post("/groups", auth, async (req, res) => {
-  const { name, description, groupType, isHidden } = req.body ?? {};
-  if (!name) return res.status(400).send("Missing name");
-
-  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
-    return res.status(401).send("Invalid token payload");
-  }
-  const me = req.user as any;
-
-  // Only allow PUBLIC or PRIVATE for assembly rooms
-  const allowed = ["PUBLIC", "PRIVATE"];
-  if (!allowed.includes(String(groupType)?.toUpperCase()))
-    return res.status(400).send("groupType must be PUBLIC or PRIVATE");
-
-  try {
-    // Get user's payment status to check if they can set isHidden
-    const user = await prisma.users.findUnique({
-      where: { id: me.id },
-      select: { isPaid: true }
-    });
-
-    if (!user) {
-      return res.status(401).send("User not found");
-    }
-
-    // Validate isHidden field based on payment status
-    let finalIsHidden = false; // Default to false
-    if (isHidden === true) {
-      if (!user.isPaid) {
-        return res.status(402).json({ 
-          error: "Premium membership required to create hidden groups" 
-        });
-      }
-      finalIsHidden = true;
-    }
-    // For unpaid users or when isHidden is not true, always use false
-
-    const group = await prisma.groups.create({
-      data: {
-        name: String(name),
-        description: description ?? null,
-        groupType: String(groupType).toUpperCase() as GroupType,
-        isHidden: finalIsHidden,
-        adminId: me.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        groupType: true,
-        isHidden: true,
-      },
-    });
-    
-    res.status(201).json(group);
-  } catch (e) {
-    if (e instanceof Error) {
-      res.status(400).json({ error: e.message });
-    } else {
-      res.status(400).json({ error: String(e) });
-    }
-  }
-});
 
 // --- List Groups ---
 router.get("/groups", auth, async (req, res) => {
@@ -121,6 +57,70 @@ router.get("/groups", auth, async (req, res) => {
       return { ...groupWithoutMembers, displayLabel: "Social Circle" };
     })
   );
+});
+
+// --- Create Group ---
+router.post("/groups", auth, async (req, res) => {
+  const { name, description, groupType, isHidden } = req.body ?? {};
+  if (!name) return res.status(400).send("Missing name");
+
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+
+  // Only allow PUBLIC or PRIVATE for assembly rooms
+  const allowed = ["PUBLIC", "PRIVATE"];
+  if (!allowed.includes(String(groupType)?.toUpperCase()))
+    return res.status(400).send("groupType must be PUBLIC or PRIVATE");
+
+  try {
+    // Get user's payment status to check if they can set isHidden
+    const user = await prisma.users.findUnique({
+      where: { id: me.id },
+      select: { isPaid: true }
+    });
+
+    if (!user) {
+      return res.status(401).send("User not found");
+    }
+
+    // Validate isHidden field based on payment status
+    let finalIsHidden = false; // Default to false
+    if (isHidden === true) {
+      if (!user.isPaid) {
+        return res.status(402).json({ 
+          error: "Premium membership required to create hidden groups" 
+        });
+      }
+      finalIsHidden = true;
+    }
+    // For unpaid users or when isHidden is not true, always use false
+
+    const group = await prisma.groups.create({
+      data: {
+        name: String(name),
+        description: description ?? null,
+        groupType: String(groupType).toUpperCase() as GroupPrivacy,
+        isHidden: finalIsHidden,
+        adminId: me.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        groupType: true,
+        isHidden: true,
+      },
+    });
+    
+    res.status(201).json(group);
+  } catch (e) {
+    if (e instanceof Error) {
+      res.status(400).json({ error: e.message });
+    } else {
+      res.status(400).json({ error: String(e) });
+    }
+  }
 });
 
 // --- Access a room (no room for PERSONAL) ---

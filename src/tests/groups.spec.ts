@@ -174,7 +174,7 @@ describe("groups endpoints", () => {
       expect(res.status).toBe(400);
     });
 
-    it("validates groupType field", async () => {
+    it("validates groupPrivacy field", async () => {
       const { token } = await createUserAndGetToken(false);
       
       const res = await request(app)
@@ -199,7 +199,7 @@ describe("groups endpoints", () => {
       expect(res.status).toBe(401);
     });
 
-    it("handles case-insensitive groupType", async () => {
+    it("handles case-insensitive groupPrivacy", async () => {
       const { token } = await createUserAndGetToken(false);
       const groupName = `Case Test Group ${Date.now()}`;
       
