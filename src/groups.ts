@@ -637,4 +637,118 @@ router.get("/groups/:groupId/join-requests/pending", auth, async (req, res) => {
   }
 });
 
+// --- Accept join group request ---
+router.post("/groups/requests/:requestId/accept", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+  const { requestId } = req.params;
+
+  if (!requestId) {
+    return res.status(400).send("Missing request ID");
+  }
+
+  try {
+    // Find the join request
+    const joinRequest = await prisma.joinGroup.findUnique({
+      where: { id: requestId },
+      include: {
+        group: true,
+        requester: true
+      }
+    });
+
+    if (!joinRequest) {
+      return res.status(404).send("Join request not found");
+    }
+
+    const groupId = joinRequest.groupId;
+
+    // Check if the user is the group admin (admins can always accept join requests)
+    const isGroupAdmin = joinRequest.group.adminId === userId;
+
+    // Check if the requester (who is trying to accept) is in the GroupMember table
+    const groupMember = await prisma.groupMember.findUnique({
+      where: {
+        userId_groupId: {
+          userId: userId,
+          groupId: groupId
+        }
+      }
+    });
+
+    // If user is not group admin and not a group member, deny access
+    if (!isGroupAdmin && !groupMember) {
+      return res.status(404).send("Not found");
+    }
+
+    // Check if the group member (not admin) is banned from the group
+    if (groupMember && groupMember.isBanned) {
+      return res.status(403).send("Forbidden");
+    }
+
+    // If user is not the group admin, check RoundTableMember status
+    if (!isGroupAdmin) {
+      const roundTableMember = await prisma.roundTableMember.findUnique({
+        where: {
+          groupId_userId: {
+            groupId: groupId,
+            userId: userId
+          }
+        }
+      });
+
+      if (roundTableMember) {
+        // If user is in RoundTableMember, check moderator and expulsion status
+        if (!roundTableMember.isModerator) {
+          return res.status(403).send("Forbidden");
+        }
+        
+        // Check if expelled
+        if (roundTableMember.isExpelled) {
+          return res.status(403).send("Forbidden");
+        }
+      }
+    }
+
+    // Update the join request status to ACCEPTED
+    const updatedRequest = await prisma.joinGroup.update({
+      where: { id: requestId },
+      data: {
+        status: "ACCEPTED",
+        decidedAt: new Date(),
+        decidedById: userId
+      },
+      include: {
+        group: true,
+        requester: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    // Add the original requester to the GroupMember table
+    await prisma.groupMember.create({
+      data: {
+        userId: joinRequest.requesterId,
+        groupId: groupId,
+        joinedAt: new Date()
+      }
+    });
+
+    res.status(200).json(updatedRequest);
+  } catch (error) {
+    console.error("Error accepting join request:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 export default router;

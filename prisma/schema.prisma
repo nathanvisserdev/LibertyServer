@@ -295,6 +295,7 @@ model RoundTableMember {
   userId       String
   role         RoundTableRole @default(CHAIRPERSON) // neutral default; enforce one CHAIR and one VICE_CHAIR in app or raw SQL
   isModerator  Boolean       @default(false)
+  isExpelled   Boolean       @default(false)
   joinedAt     DateTime      @default(now())
   absentUntil  DateTime?
 

@@ -2290,4 +2290,370 @@ describe("groups endpoints", () => {
       expect(res.body[1].id).toBe(firstRequest.id);
     });
   });
+
+  describe("POST /groups/requests/:requestId/accept", () => {
+    it("should successfully accept a join request when user is group admin", async () => {
+      // Create admin user
+      const { userId: adminId, token: adminToken } = await createUserAndGetToken(true);
+      
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: generateUniqueString("Test Group", testNamespace),
+          description: "Test group for join request acceptance",
+          adminId: adminId,
+          groupType: "PUBLIC"
+        }
+      });
+
+      // Create requester
+      const { userId: requesterId, token: requesterToken } = await createUserAndGetToken(true);
+      
+      // Create join request
+      const joinRequest = await prisma.joinGroup.create({
+        data: {
+          requesterId: requesterId,
+          groupId: group.id,
+          status: "PENDING"
+        }
+      });
+
+      // Admin accepts the request
+      const res = await request(app)
+        .post(`/groups/requests/${joinRequest.id}/accept`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ACCEPTED");
+      expect(res.body.decidedById).toBe(adminId);
+      expect(res.body.decidedAt).toBeDefined();
+
+      // Verify the requester is now a group member
+      const groupMember = await prisma.groupMember.findUnique({
+        where: {
+          userId_groupId: {
+            userId: requesterId,
+            groupId: group.id
+          }
+        }
+      });
+      expect(groupMember).toBeDefined();
+      expect(groupMember?.userId).toBe(requesterId);
+      expect(groupMember?.groupId).toBe(group.id);
+    });
+
+    it("should successfully accept a join request when user is round table moderator", async () => {
+      // Create admin user
+      const { userId: adminId } = await createUserAndGetToken(true);
+      
+      // Create moderator user
+      const { userId: moderatorId, token: moderatorToken } = await createUserAndGetToken(true);
+      
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: generateUniqueString("Test Group", testNamespace),
+          description: "Test group for join request acceptance",
+          adminId: adminId,
+          groupType: "PUBLIC"
+        }
+      });
+
+      // Add moderator to group as member
+      await prisma.groupMember.create({
+        data: {
+          userId: moderatorId,
+          groupId: group.id
+        }
+      });
+
+      // Create round table
+      const roundTable = await prisma.roundTable.create({
+        data: {
+          groupId: group.id,
+          adminId: adminId
+        }
+      });
+
+      // Add moderator to round table as moderator
+      await prisma.roundTableMember.create({
+        data: {
+          groupId: group.id,
+          userId: moderatorId,
+          isModerator: true,
+          isExpelled: false
+        }
+      });
+
+      // Create requester
+      const { userId: requesterId } = await createUserAndGetToken(true);
+      
+      // Create join request
+      const joinRequest = await prisma.joinGroup.create({
+        data: {
+          requesterId: requesterId,
+          groupId: group.id,
+          status: "PENDING"
+        }
+      });
+
+      // Moderator accepts the request
+      const res = await request(app)
+        .post(`/groups/requests/${joinRequest.id}/accept`)
+        .set("Authorization", `Bearer ${moderatorToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ACCEPTED");
+      expect(res.body.decidedById).toBe(moderatorId);
+
+      // Verify the requester is now a group member
+      const groupMember = await prisma.groupMember.findUnique({
+        where: {
+          userId_groupId: {
+            userId: requesterId,
+            groupId: group.id
+          }
+        }
+      });
+      expect(groupMember).toBeDefined();
+    });
+
+    it("should return 404 for non-existent join request", async () => {
+      const { token } = await createUserAndGetToken(true);
+      
+      const res = await request(app)
+        .post(`/groups/requests/non-existent-id/accept`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Join request not found");
+    });
+
+    it("should return 404 when user is not a group member", async () => {
+      // Create admin user
+      const { userId: adminId } = await createUserAndGetToken(true);
+      
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: generateUniqueString("Test Group", testNamespace),
+          description: "Test group for join request acceptance",
+          adminId: adminId,
+          groupType: "PUBLIC"
+        }
+      });
+
+      // Create requester
+      const { userId: requesterId } = await createUserAndGetToken(true);
+      
+      // Create join request
+      const joinRequest = await prisma.joinGroup.create({
+        data: {
+          requesterId: requesterId,
+          groupId: group.id,
+          status: "PENDING"
+        }
+      });
+
+      // Create non-member user who tries to accept
+      const { token: nonMemberToken } = await createUserAndGetToken(true);
+
+      const res = await request(app)
+        .post(`/groups/requests/${joinRequest.id}/accept`)
+        .set("Authorization", `Bearer ${nonMemberToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.text).toBe("Not found");
+    });
+
+    it("should return 403 when group member is banned", async () => {
+      // Create admin user
+      const { userId: adminId } = await createUserAndGetToken(true);
+      
+      // Create banned user
+      const { userId: bannedId, token: bannedToken } = await createUserAndGetToken(true);
+      
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: generateUniqueString("Test Group", testNamespace),
+          description: "Test group for join request acceptance",
+          adminId: adminId,
+          groupType: "PUBLIC"
+        }
+      });
+
+      // Add banned user to group as banned member
+      await prisma.groupMember.create({
+        data: {
+          userId: bannedId,
+          groupId: group.id,
+          isBanned: true
+        }
+      });
+
+      // Create requester
+      const { userId: requesterId } = await createUserAndGetToken(true);
+      
+      // Create join request
+      const joinRequest = await prisma.joinGroup.create({
+        data: {
+          requesterId: requesterId,
+          groupId: group.id,
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .post(`/groups/requests/${joinRequest.id}/accept`)
+        .set("Authorization", `Bearer ${bannedToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("Forbidden");
+    });
+
+    it("should return 403 when round table member is not a moderator", async () => {
+      // Create admin user
+      const { userId: adminId } = await createUserAndGetToken(true);
+      
+      // Create regular round table member
+      const { userId: memberId, token: memberToken } = await createUserAndGetToken(true);
+      
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: generateUniqueString("Test Group", testNamespace),
+          description: "Test group for join request acceptance",
+          adminId: adminId,
+          groupType: "PUBLIC"
+        }
+      });
+
+      // Add member to group
+      await prisma.groupMember.create({
+        data: {
+          userId: memberId,
+          groupId: group.id
+        }
+      });
+
+      // Create round table
+      await prisma.roundTable.create({
+        data: {
+          groupId: group.id,
+          adminId: adminId
+        }
+      });
+
+      // Add member to round table as non-moderator
+      await prisma.roundTableMember.create({
+        data: {
+          groupId: group.id,
+          userId: memberId,
+          isModerator: false,
+          isExpelled: false
+        }
+      });
+
+      // Create requester
+      const { userId: requesterId } = await createUserAndGetToken(true);
+      
+      // Create join request
+      const joinRequest = await prisma.joinGroup.create({
+        data: {
+          requesterId: requesterId,
+          groupId: group.id,
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .post(`/groups/requests/${joinRequest.id}/accept`)
+        .set("Authorization", `Bearer ${memberToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("Forbidden");
+    });
+
+    it("should return 403 when round table member is expelled", async () => {
+      // Create admin user
+      const { userId: adminId } = await createUserAndGetToken(true);
+      
+      // Create expelled moderator
+      const { userId: expelledId, token: expelledToken } = await createUserAndGetToken(true);
+      
+      // Create group
+      const group = await prisma.groups.create({
+        data: {
+          name: generateUniqueString("Test Group", testNamespace),
+          description: "Test group for join request acceptance",
+          adminId: adminId,
+          groupType: "PUBLIC"
+        }
+      });
+
+      // Add expelled member to group
+      await prisma.groupMember.create({
+        data: {
+          userId: expelledId,
+          groupId: group.id
+        }
+      });
+
+      // Create round table
+      await prisma.roundTable.create({
+        data: {
+          groupId: group.id,
+          adminId: adminId
+        }
+      });
+
+      // Add member to round table as expelled moderator
+      await prisma.roundTableMember.create({
+        data: {
+          groupId: group.id,
+          userId: expelledId,
+          isModerator: true,
+          isExpelled: true
+        }
+      });
+
+      // Create requester
+      const { userId: requesterId } = await createUserAndGetToken(true);
+      
+      // Create join request
+      const joinRequest = await prisma.joinGroup.create({
+        data: {
+          requesterId: requesterId,
+          groupId: group.id,
+          status: "PENDING"
+        }
+      });
+
+      const res = await request(app)
+        .post(`/groups/requests/${joinRequest.id}/accept`)
+        .set("Authorization", `Bearer ${expelledToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.text).toBe("Forbidden");
+    });
+
+    it("should return 401 for invalid token", async () => {
+      const res = await request(app)
+        .post(`/groups/requests/some-id/accept`)
+        .set("Authorization", "Bearer invalid-token");
+
+      expect(res.status).toBe(401);
+    });
+
+    it("should return 400 for missing request ID", async () => {
+      const { token } = await createUserAndGetToken(true);
+      
+      const res = await request(app)
+        .post(`/groups/requests//accept`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404); // Express will return 404 for invalid route
+    });
+  });
 });
