@@ -58,14 +58,52 @@ async function createUserAndGetToken(isPaid?: boolean, email?: string, password?
 describe("groups endpoints", () => {
   // Clean up test data after all tests complete
   afterAll(async () => {
-    // Only delete test users created by this test file
-    await prisma.users.deleteMany({
+    // Delete in proper order to respect foreign key constraints
+    // 1. Delete child records first
+    await prisma.joinGroup.deleteMany({
       where: {
-        email: {
-          contains: testNamespace
-        }
+        requester: { email: { contains: testNamespace } }
       }
     });
+    
+    await prisma.groupMember.deleteMany({
+      where: {
+        user: { email: { contains: testNamespace } }
+      }
+    });
+    
+    await prisma.posts.deleteMany({
+      where: {
+        user: { email: { contains: testNamespace } }
+      }
+    });
+    
+    await prisma.roundTableMember.deleteMany({
+      where: {
+        user: { email: { contains: testNamespace } }
+      }
+    });
+    
+    await prisma.roundTable.deleteMany({
+      where: {
+        group: { admin: { email: { contains: testNamespace } } }
+      }
+    });
+    
+    // 2. Delete groups (after child records are gone)
+    await prisma.groups.deleteMany({
+      where: {
+        admin: { email: { contains: testNamespace } }
+      }
+    });
+    
+    // 3. Finally delete test users (after groups are gone)
+    await prisma.users.deleteMany({
+      where: {
+        email: { contains: testNamespace }
+      }
+    });
+    
     await prisma.$disconnect();
   });
 

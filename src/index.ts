@@ -1,6 +1,11 @@
 
 
-import "dotenv/config";
+// Only load .env in non-test environments
+// Tests set DATABASE_URL before importing this file
+if (process.env.NODE_ENV !== 'test') {
+  await import("dotenv/config");
+}
+
 import express from "express";
 import cors from "cors";
 import authRouter from "./auth.js";
@@ -12,6 +17,7 @@ import usersRouter from "./users.js";
 import searchRouter from "./search.js";
 import profileRouter from "./profile.js";
 import connectionsRouter from "./connections.js";
+import { signupRouter } from "./signup.js";
 
 const app = express();
 app.use(express.json());
@@ -22,6 +28,7 @@ app.use(cors({ origin: CORS_ORIGIN || true }));
 
 app.use(miscRouter);
 app.use(authRouter);
+app.use(signupRouter);
 app.use(usersRouter);
 app.use(blocksRouter);
 app.use(postsRouter);

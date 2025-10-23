@@ -23,5 +23,10 @@ export function resetPrismaClient(): void {
   }
 }
 
-// Export a default instance for convenience
-export const prismaClient = getPrismaClient();
+// Don't create instance at module load - let it be lazy loaded
+// This allows tests to set DATABASE_URL first
+export const prismaClient = new Proxy({} as any, {
+  get(target, prop) {
+    return getPrismaClient()[prop as keyof PrismaClient];
+  }
+});

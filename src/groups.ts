@@ -17,7 +17,14 @@ router.get("/groups", auth, async (req, res) => {
     // Get all groups with admin and membership information
     const groups = await prisma.groups.findMany({ 
       include: { 
-        admin: true,
+        admin: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true
+          }
+        },
         members: {
           where: { userId: userId },
           select: { userId: true }
