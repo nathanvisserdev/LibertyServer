@@ -1,7 +1,10 @@
+// Set per-worker test database BEFORE any imports
+process.env.DATABASE_URL = `file:./prisma/test-${process.env.VITEST_WORKER_ID || '0'}.db`;
+
 import { describe, it, expect, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../index.js";
-import { PrismaClient } from "../generated/prisma/index.js";
+import { prismaClient as prisma } from "../prismaClient.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { generateUniqueEmail, generateUniqueUsername, generateTestNamespace } from './testUtils.js';
@@ -9,8 +12,6 @@ import { generateUniqueEmail, generateUniqueUsername, generateTestNamespace } fr
 const __filename = fileURLToPath(import.meta.url);
 const testFileName = path.basename(__filename, '.spec.ts');
 const testNamespace = generateTestNamespace(testFileName);
-
-const prisma = new PrismaClient();
 
 describe("auth endpoints", () => {
   // Clean up test data after all tests complete

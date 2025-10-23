@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { PrismaClient, Prisma } from "./generated/prisma/index.js";
+import { Prisma } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
 import bcrypt from "bcrypt";
+import { prismaClient as prisma } from "./prismaClient.js";
 
-const prisma = new PrismaClient();
 const router = Router();
 
 // --- Get the Current user object (requires token) ---

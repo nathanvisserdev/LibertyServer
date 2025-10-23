@@ -2,10 +2,9 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { PrismaClient, GroupPrivacy } from "./generated/prisma/index.js";
+import { GroupPrivacy } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
-
-const prisma = new PrismaClient();
+import { prismaClient as prisma } from "./prismaClient.js";
 const router = Router();
 
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);

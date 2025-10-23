@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { PrismaClient } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
+import { prismaClient as prisma } from "./prismaClient.js";
 
-const prisma = new PrismaClient();
 const router = Router();
 
 // --- Search Users and Groups ---

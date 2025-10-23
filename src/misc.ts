@@ -1,13 +1,11 @@
 
 import { Router } from "express";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "./generated/prisma/index.js";
+import { prismaClient as prisma } from "./prismaClient.js";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET ?? "";
 if (!JWT_SECRET) throw new Error("Missing JWT_SECRET in .env");
-
-const prisma = new PrismaClient();
 
 // --- Ping ---
 router.get("/ping", (_req, res) => res.status(200).send("ok"));

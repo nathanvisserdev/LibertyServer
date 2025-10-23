@@ -1,9 +1,8 @@
 
 import { Router } from "express";
-import { PrismaClient, GroupPrivacy, PostVisibility } from "./generated/prisma/index.js";
+import { GroupPrivacy, PostVisibility } from "./generated/prisma/index.js";
 import { auth } from "./misc.js";
-
-const prisma = new PrismaClient();
+import { prismaClient as prisma } from "./prismaClient.js";
 const router = Router();
 
 // --- Create Post (≤500 chars). Public by default; or to a group if groupId provided ---
