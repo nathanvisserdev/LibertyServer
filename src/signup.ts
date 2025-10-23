@@ -55,9 +55,12 @@ router.post("/availability", async (req, res) => {
   }
 });
 
-// --- Signup (email + password + firstName + lastName + username) ---
+// --- Signup (email + password + firstName + lastName + username + dateOfBirth + gender) ---
 router.post("/signup", async (req, res) => {
-  const { email, password, firstName, lastName, username, isPaid } = req.body ?? {};
+  const { 
+    email, password, firstName, lastName, username, dateOfBirth, gender,
+    phoneNumber, photo, about, isPaid 
+  } = req.body ?? {};
   
   // Reject isPaid field if present in request body
   if (isPaid !== undefined) {
@@ -65,8 +68,8 @@ router.post("/signup", async (req, res) => {
   }
   
   // Check required fields
-  if (!email || !password || !firstName || !lastName || !username) {
-    return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName, username" });
+  if (!email || !password || !firstName || !lastName || !username || !dateOfBirth || !gender) {
+    return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName, username, dateOfBirth, gender" });
   }
 
   // Validate email format (basic)
@@ -99,27 +102,87 @@ router.post("/signup", async (req, res) => {
     return res.status(400).json({ error: "Username must be 3-100 characters and contain only lowercase letters, numbers, underscores, and periods" });
   }
 
+  // Validate dateOfBirth (must be a valid date and user must be at least 13 years old)
+  const dobDate = new Date(dateOfBirth);
+  if (isNaN(dobDate.getTime())) {
+    return res.status(400).json({ error: "Invalid date format for dateOfBirth" });
+  }
+  const thirteenYearsAgo = new Date();
+  thirteenYearsAgo.setFullYear(thirteenYearsAgo.getFullYear() - 13);
+  if (dobDate > thirteenYearsAgo) {
+    return res.status(400).json({ error: "User must be at least 13 years old" });
+  }
+
+  // Validate gender (must be one of the valid enum values)
+  const validGenders = ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'];
+  const genderStr = String(gender).toUpperCase();
+  if (!validGenders.includes(genderStr)) {
+    return res.status(400).json({ error: "Invalid gender value. Must be one of: MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY" });
+  }
+
+  // Validate optional fields
+  if (phoneNumber !== undefined && phoneNumber !== null) {
+    const phoneStr = String(phoneNumber).trim();
+    if (phoneStr.length > 0 && phoneStr.length > 20) {
+      return res.status(400).json({ error: "phoneNumber must be at most 20 characters" });
+    }
+  }
+
+  if (about !== undefined && about !== null) {
+    const aboutStr = String(about).trim();
+    if (aboutStr.length > 500) {
+      return res.status(400).json({ error: "about must be at most 500 characters" });
+    }
+  }
+
+  if (photo !== undefined && photo !== null) {
+    const photoStr = String(photo).trim();
+    if (photoStr.length > 0 && photoStr.length > 500) {
+      return res.status(400).json({ error: "photo must be at most 500 characters" });
+    }
+  }
+
   try {
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     
     // Use Prisma transaction to create user, group, and roster entry
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create the user
+      const userData: any = {
+        email: emailStr,
+        password: passwordHash,
+        firstName: firstNameStr,
+        lastName: lastNameStr,
+        username: usernameStr,
+        dateOfBirth: dobDate,
+        gender: genderStr,
+        isPaid: false, // Explicitly set to false (cannot be set by client)
+      };
+
+      // Add optional fields if provided
+      if (phoneNumber !== undefined && phoneNumber !== null && String(phoneNumber).trim().length > 0) {
+        userData.phoneNumber = String(phoneNumber).trim();
+      }
+      if (photo !== undefined && photo !== null && String(photo).trim().length > 0) {
+        userData.photo = String(photo).trim();
+      }
+      if (about !== undefined && about !== null && String(about).trim().length > 0) {
+        userData.about = String(about).trim();
+      }
+
       const user = await tx.users.create({
-        data: {
-          email: emailStr,
-          password: passwordHash,
-          firstName: firstNameStr,
-          lastName: lastNameStr,
-          username: usernameStr,
-          isPaid: false, // Explicitly set to false (cannot be set by client)
-        },
+        data: userData,
         select: {
           id: true,
           email: true,
           username: true,
           firstName: true,
           lastName: true,
+          dateOfBirth: true,
+          gender: true,
+          phoneNumber: true,
+          photo: true,
+          about: true,
           createdAt: true,
           isPrivate: true,
         },

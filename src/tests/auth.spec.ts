@@ -37,7 +37,9 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "MALE"
       });
     const res = await request(app)
       .post("/login")
@@ -56,7 +58,9 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: username 
+        username: username,
+        dateOfBirth: "1990-01-01",
+        gender: "FEMALE"
       });
     const res = await request(app)
       .post("/login")
@@ -76,7 +80,9 @@ describe("auth endpoints", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: username 
+        username: username,
+        dateOfBirth: "1990-01-01",
+        gender: "OTHER"
       });
     
     const loginRes = await request(app)

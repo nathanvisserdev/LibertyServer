@@ -37,7 +37,9 @@ describe("POST /signup", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "MALE"
       });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("id");
@@ -45,6 +47,8 @@ describe("POST /signup", () => {
     expect(res.body).toHaveProperty("username", username);
     expect(res.body).toHaveProperty("firstName", "Test");
     expect(res.body).toHaveProperty("lastName", "User");
+    expect(res.body).toHaveProperty("dateOfBirth");
+    expect(res.body).toHaveProperty("gender", "MALE");
     expect(res.body).toHaveProperty("createdAt");
     expect(res.body).toHaveProperty("isPrivate");
     expect(res.body).not.toHaveProperty("password");
@@ -62,6 +66,46 @@ describe("POST /signup", () => {
     expect(res.body.error).toContain("Missing required fields");
   });
 
+  it("400 bad request when missing dateOfBirth", async () => {
+    const uniqueEmail = generateUniqueEmail('test');
+    const username = generateUniqueUsername();
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email: uniqueEmail, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        gender: "FEMALE"
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error).toContain("Missing required fields");
+    expect(res.body.error).toContain("dateOfBirth");
+  });
+
+  it("400 bad request when missing gender", async () => {
+    const uniqueEmail = generateUniqueEmail('test');
+    const username = generateUniqueUsername();
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email: uniqueEmail, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01"
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error).toContain("Missing required fields");
+    expect(res.body.error).toContain("gender");
+  });
+
   it("400 bad request when password too short", async () => {
     const uniqueEmail = generateUniqueEmail('test');
     const username = generateUniqueUsername();
@@ -73,7 +117,9 @@ describe("POST /signup", () => {
         password: "short", 
         firstName: "Test", 
         lastName: "User", 
-        username 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "OTHER"
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -90,7 +136,9 @@ describe("POST /signup", () => {
         password: "testpass123", 
         firstName: "Test", 
         lastName: "User", 
-        username: "AB" // too short and uppercase
+        username: "AB", // too short and uppercase
+        dateOfBirth: "1990-01-01",
+        gender: "PREFER_NOT_TO_SAY"
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -109,6 +157,8 @@ describe("POST /signup", () => {
         firstName: "Test", 
         lastName: "User", 
         username: generateUniqueUsername(),
+        dateOfBirth: "1990-01-01",
+        gender: "MALE",
         isPaid: true // This should be rejected
       });
     expect(res1.status).toBe(400);
@@ -125,6 +175,8 @@ describe("POST /signup", () => {
         firstName: "Test", 
         lastName: "User", 
         username: generateUniqueUsername(),
+        dateOfBirth: "1990-01-01",
+        gender: "FEMALE",
         isPaid: false // This should also be rejected
       });
     expect(res2.status).toBe(400);
@@ -143,7 +195,9 @@ describe("POST /signup", () => {
         password: "testpass123", 
         firstName: "First", 
         lastName: "User", 
-        username: generateUniqueUsername() 
+        username: generateUniqueUsername(),
+        dateOfBirth: "1990-01-01",
+        gender: "MALE"
       });
 
     // Try to create second user with same email
@@ -154,7 +208,9 @@ describe("POST /signup", () => {
         password: "testpass123", 
         firstName: "Second", 
         lastName: "User", 
-        username: generateUniqueUsername() 
+        username: generateUniqueUsername(),
+        dateOfBirth: "1990-01-01",
+        gender: "FEMALE"
       });
     
     expect(res.status).toBe(409);
@@ -173,7 +229,9 @@ describe("POST /signup", () => {
         password: "testpass123", 
         firstName: "First", 
         lastName: "User", 
-        username 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "MALE"
       });
 
     // Try to create second user with same username
@@ -184,12 +242,188 @@ describe("POST /signup", () => {
         password: "testpass123", 
         firstName: "Second", 
         lastName: "User", 
-        username 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "FEMALE"
       });
     
     expect(res.status).toBe(409);
     expect(res.body).toHaveProperty("error");
     expect(res.body.error).toContain("Username already exists");
+  });
+
+  it("400 bad request when dateOfBirth is invalid format", async () => {
+    const uniqueEmail = generateUniqueEmail('invaliddate');
+    const username = generateUniqueUsername();
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email: uniqueEmail, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "not-a-date",
+        gender: "MALE"
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error).toContain("Invalid date format");
+  });
+
+  it("400 bad request when user is under 13 years old", async () => {
+    const uniqueEmail = generateUniqueEmail('underage');
+    const username = generateUniqueUsername();
+    const recentDate = new Date();
+    recentDate.setFullYear(recentDate.getFullYear() - 10); // 10 years ago
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email: uniqueEmail, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: recentDate.toISOString().split('T')[0],
+        gender: "MALE"
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error).toContain("must be at least 13 years old");
+  });
+
+  it("400 bad request when gender is invalid", async () => {
+    const uniqueEmail = generateUniqueEmail('invalidgender');
+    const username = generateUniqueUsername();
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email: uniqueEmail, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "INVALID_GENDER"
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error).toContain("Invalid gender value");
+  });
+
+  it("201 created with optional phoneNumber field", async () => {
+    const email = generateUniqueEmail('withphone', testNamespace);
+    const username = generateUniqueUsername();
+    const phoneNumber = "+1-555-123-4567";
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "FEMALE",
+        phoneNumber
+      });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty("phoneNumber", phoneNumber);
+  });
+
+  it("201 created with optional photo field", async () => {
+    const email = generateUniqueEmail('withphoto', testNamespace);
+    const username = generateUniqueUsername();
+    const photo = "https://example.com/photo.jpg";
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "OTHER",
+        photo
+      });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty("photo", photo);
+  });
+
+  it("201 created with optional about field", async () => {
+    const email = generateUniqueEmail('withabout', testNamespace);
+    const username = generateUniqueUsername();
+    const about = "This is my bio. I love coding!";
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "PREFER_NOT_TO_SAY",
+        about
+      });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty("about", about);
+  });
+
+  it("201 created with all optional fields", async () => {
+    const email = generateUniqueEmail('allfields', testNamespace);
+    const username = generateUniqueUsername();
+    const phoneNumber = "+1-555-999-8888";
+    const photo = "https://example.com/avatar.png";
+    const about = "Full profile with all fields!";
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "MALE",
+        phoneNumber,
+        photo,
+        about
+      });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty("phoneNumber", phoneNumber);
+    expect(res.body).toHaveProperty("photo", photo);
+    expect(res.body).toHaveProperty("about", about);
+  });
+
+  it("400 bad request when about field is too long", async () => {
+    const uniqueEmail = generateUniqueEmail('longabout');
+    const username = generateUniqueUsername();
+    const longAbout = "a".repeat(501); // Exceeds 500 character limit
+    
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email: uniqueEmail, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "MALE",
+        about: longAbout
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error).toContain("about must be at most 500 characters");
   });
 });
 
@@ -248,7 +482,9 @@ describe("POST /availability", () => {
           password: "password123",
           firstName: "Test",
           lastName: "User",
-          username: uniqueUsername
+          username: uniqueUsername,
+          dateOfBirth: "1990-01-01",
+          gender: "MALE"
         });
 
       // Then check if the username is available
@@ -285,7 +521,9 @@ describe("POST /availability", () => {
           password: "password123",
           firstName: "Test",
           lastName: "User",
-          username: uniqueUsername
+          username: uniqueUsername,
+          dateOfBirth: "1990-01-01",
+          gender: "FEMALE"
         });
 
       // Then check if the email is available
@@ -337,7 +575,9 @@ describe("POST /availability", () => {
           password: "password123",
           firstName: "Test",
           lastName: "User",
-          username: baseUsername.toLowerCase()
+          username: baseUsername.toLowerCase(),
+          dateOfBirth: "1990-01-01",
+          gender: "MALE"
         });
 
       // Check with uppercase version
@@ -363,7 +603,9 @@ describe("POST /availability", () => {
           password: "password123",
           firstName: "Test",
           lastName: "User",
-          username: uniqueUsername
+          username: uniqueUsername,
+          dateOfBirth: "1990-01-01",
+          gender: "OTHER"
         });
 
       // Check with uppercase version

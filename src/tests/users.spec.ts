@@ -26,7 +26,9 @@ async function createUserAndGetToken(email?: string, password?: string) {
       password: userPassword,
       firstName: "Test",
       lastName: "User",
-      username: username
+      username: username,
+      dateOfBirth: "1990-01-01",
+      gender: "FEMALE"
     });
   
   const loginRes = await request(app)
