@@ -1,11 +1,25 @@
 import apn from "@parse/node-apn";
 import { prismaClient as prisma } from "./prismaClient.js";
+import fs from "fs";
+import path from "path";
+
+// Read the P8 key file if path is provided
+let apnKeyContent: string | undefined;
+if (process.env.APN_KEY_PATH) {
+  try {
+    const keyPath = path.resolve(process.env.APN_KEY_PATH);
+    apnKeyContent = fs.readFileSync(keyPath, "utf8");
+    console.log("✅ APNs P8 key loaded successfully");
+  } catch (error) {
+    console.error("❌ Failed to read APNs P8 key:", error);
+  }
+}
 
 // APNs Provider configuration using P8 key
 // Set environment variables: APN_KEY_ID, APN_TEAM_ID, APN_KEY_PATH, APN_BUNDLE_ID
 const apnProvider = new apn.Provider({
   token: {
-    key: process.env.APN_KEY_PATH || "", // Path to .p8 file
+    key: apnKeyContent || "", // File contents of .p8 file
     keyId: process.env.APN_KEY_ID || "",
     teamId: process.env.APN_TEAM_ID || "",
   },

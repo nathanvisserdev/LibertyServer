@@ -20,6 +20,8 @@ out/
 .env.*
 *.pem
 *.key
+*.p8
+AuthKey_*.p8
 
 # -------------------------------------------------------
 # Logs and debugging output
