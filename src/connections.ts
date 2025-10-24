@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { auth } from "./misc.js";
 import { prismaClient as prisma } from "./prismaClient.js";
+import { sendConnectionNotification } from "./pushNotifications.js";
 
 const router = Router();
 
@@ -191,6 +192,16 @@ router.post("/connections/request", auth, async (req, res) => {
       }
     });
 
+    // Send push notification to the requested user
+    try {
+      console.log(`📬 Sending connection notification to user ${requestedId}`);
+      await sendConnectionNotification(requestedId);
+      console.log(`✅ Connection notification sent successfully`);
+    } catch (notifError) {
+      // Log but don't fail the request if notification fails
+      console.error("❌ Failed to send connection notification:", notifError);
+    }
+
     return res.status(201).json({
       requesterId: connectionRequest.requesterId,
       requestedId: connectionRequest.requestedId,
@@ -211,6 +222,12 @@ router.get("/connections/pending/incoming", auth, async (req, res) => {
   const sessionUserId = req.user.id;
 
   try {
+    // Reset pending request count when user views their requests
+    await prisma.users.update({
+      where: { id: sessionUserId },
+      data: { pendingRequestCount: 0 },
+    });
+
     const incomingRequests: any[] = [];
 
     // Fetch all PENDING connection requests where session user is the requested user
