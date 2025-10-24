@@ -34,7 +34,7 @@ router.patch("/users/:id", auth, async (req, res) => {
     return res.status(403).send("Forbidden: Can only update your own profile");
   }
 
-  const { firstName, lastName, dateOfBirth, gender, photo, about } = req.body ?? {};
+  const { firstName, lastName, dateOfBirth, gender, profilePhoto, about } = req.body ?? {};
 
   // Validate inputs
   const updateData: any = {};
@@ -72,11 +72,11 @@ router.patch("/users/:id", auth, async (req, res) => {
     updateData.gender = gender;
   }
 
-  if (photo !== undefined) {
-    if (typeof photo !== "string" || (photo.trim().length > 0 && !photo.match(/^https?:\/\/.+/))) {
-      return res.status(400).send("Invalid photo: must be a valid URL or empty string");
+  if (profilePhoto !== undefined) {
+    if (typeof profilePhoto !== "string" || (profilePhoto.trim().length > 0 && !profilePhoto.match(/^https?:\/\/.+/))) {
+      return res.status(400).send("Invalid profilePhoto: must be a valid URL or empty string");
     }
-    updateData.photo = photo.trim() || null;
+    updateData.profilePhoto = profilePhoto.trim() || null;
   }
 
   if (about !== undefined) {
@@ -103,7 +103,7 @@ router.patch("/users/:id", auth, async (req, res) => {
         username: true,
         dateOfBirth: true,
         gender: true,
-        photo: true,
+        profilePhoto: true,
         about: true,
         createdAt: true,
         isPrivate: true,

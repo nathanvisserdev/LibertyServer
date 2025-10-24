@@ -25,7 +25,7 @@ router.get("/users/:id", auth, async (req, res) => {
         firstName: true,
         lastName: true,
         username: true,
-        photo: true,
+        profilePhoto: true,
         about: true,
         gender: true,
         isPrivate: true,
@@ -93,25 +93,27 @@ router.get("/users/:id", auth, async (req, res) => {
     // Build response based on privacy and connection status
     if (isConnected || !targetUser.isPrivate) {
       // Connected or target is not private - show extended profile
+      console.log("📸 Returning profile with photo:", targetUser.profilePhoto);
       return res.status(200).json({
         id: targetUser.id,
         firstName: targetUser.firstName,
         lastName: targetUser.lastName,
         username: targetUser.username,
         gender: targetUser.gender,
-        photo: targetUser.photo,
+        profilePhoto: targetUser.profilePhoto,
         about: targetUser.about,
         connectionStatus: connectionStatus,
         requestType: requestType,
       });
     } else {
       // Target is private and not connected - show minimal profile
+      console.log("📸 Returning minimal profile with photo:", targetUser.profilePhoto);
       return res.status(200).json({
         id: targetUser.id,
         firstName: targetUser.firstName,
         lastName: targetUser.lastName,
         username: targetUser.username,
-        photo: targetUser.photo,
+        profilePhoto: targetUser.profilePhoto,
         connectionStatus: connectionStatus,
         requestType: requestType,
       });

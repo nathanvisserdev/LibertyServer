@@ -115,7 +115,7 @@ model Users {
   gender        Gender?
   phoneNumber   String?
   zipCode       String?
-  photo         String?
+  profilePhoto  String?
   about         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

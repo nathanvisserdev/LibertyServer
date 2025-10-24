@@ -30,7 +30,7 @@ router.get("/connections", auth, async (req, res) => {
             firstName: true,
             lastName: true,
             username: true,
-            photo: true
+            profilePhoto: true
           }
         },
         requested: {
@@ -39,7 +39,7 @@ router.get("/connections", auth, async (req, res) => {
             firstName: true,
             lastName: true,
             username: true,
-            photo: true
+            profilePhoto: true
           }
         }
       },
@@ -60,7 +60,7 @@ router.get("/connections", auth, async (req, res) => {
         firstName: otherUser.firstName,
         lastName: otherUser.lastName,
         username: otherUser.username,
-        photo: otherUser.photo,
+        profilePhoto: otherUser.profilePhoto,
         type: connection.type,
         createdAt: connection.since
       });
@@ -243,7 +243,7 @@ router.get("/connections/pending/incoming", auth, async (req, res) => {
             firstName: true,
             lastName: true,
             username: true,
-            photo: true
+            profilePhoto: true
           }
         }
       },
@@ -298,7 +298,7 @@ router.get("/connections/pending/outgoing", auth, async (req, res) => {
             firstName: true,
             lastName: true,
             username: true,
-            photo: true
+            profilePhoto: true
           }
         }
       },

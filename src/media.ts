@@ -83,21 +83,22 @@ router.post("/users/me/photo", auth, async (req, res) => {
   }
 
   try {
-    // Build photo URL using CDN base URL
-    const photoUrl = `${process.env.CDN_BASE_URL}/${key.replace(/^photos\//, "")}`;
+    // Store the key in the database (not the full URL)
+    // The key will be used to generate presigned read URLs on demand
+    console.log("📸 Saving photo key:", key);
 
-    // Update user's photo URL in database
+    // Update user's profilePhoto with the key
     const updatedUser = await prisma.users.update({
       where: { id: userId },
-      data: { photo: photoUrl },
+      data: { profilePhoto: key },
       select: {
         id: true,
-        photo: true,
+        profilePhoto: true,
       },
     });
 
     return res.status(200).json({
-      photo: updatedUser.photo,
+      profilePhoto: updatedUser.profilePhoto,
     });
   } catch (error) {
     console.error("Error updating user photo:", error);

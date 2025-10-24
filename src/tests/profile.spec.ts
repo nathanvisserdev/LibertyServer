@@ -191,7 +191,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("lastName", "User");
       expect(res.body).toHaveProperty("username");
       expect(res.body).toHaveProperty("gender");
-      expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", "ACQUAINTANCE");
       expect(res.body).toHaveProperty("requestType", null);
@@ -265,7 +265,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("lastName", "User");
       expect(res.body).toHaveProperty("username");
       expect(res.body).toHaveProperty("gender");
-      expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus", null);
       expect(res.body).toHaveProperty("requestType", null);
@@ -290,7 +290,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("firstName", "Test");
       expect(res.body).toHaveProperty("lastName", "User");
       expect(res.body).toHaveProperty("username");
-      expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("connectionStatus", null);
       
       // Should NOT have these fields for private unconnected users
@@ -504,18 +504,18 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("firstName");
       expect(res.body).toHaveProperty("lastName");
       expect(res.body).toHaveProperty("username");
-      expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("profilePhoto");
     });
 
-    it("handles null photo and about fields correctly", async () => {
+    it("handles null profilePhoto and about fields correctly", async () => {
       const { token: sessionToken } = await createUserAndGetToken();
       const { userId: targetUserId } = await createUserAndGetToken();
       
-      // Update target user to have null photo and about
+      // Update target user to have null profilePhoto and about
       await prisma.users.update({
         where: { id: targetUserId },
         data: { 
-          photo: null,
+          profilePhoto: null,
           about: null,
           isPrivate: false
         },
@@ -526,8 +526,46 @@ describe("profile endpoints", () => {
         .set("Authorization", `Bearer ${sessionToken}`);
       
       expect(res.status).toBe(200);
-      expect(res.body.photo).toBe(null);
+      expect(res.body.profilePhoto).toBe(null);
       expect(res.body.about).toBe(null);
+    });
+
+    it("returns profilePhoto when user adds one at signup", async () => {
+      const { token: sessionToken } = await createUserAndGetToken();
+      
+      // Create a user with a profile photo at signup
+      const userEmail = generateUniqueEmail('withphoto', testNamespace);
+      const photoUrl = "https://example.com/photos/user123/profile.jpg";
+      
+      const signupRes = await request(app)
+        .post("/signup")
+        .send({ 
+          email: userEmail, 
+          password: "testpass123",
+          firstName: "PhotoUser",
+          lastName: "Test",
+          username: generateUniqueUsername(),
+          dateOfBirth: "1995-05-15",
+          gender: "FEMALE",
+          profilePhoto: photoUrl
+        });
+      
+      expect(signupRes.status).toBe(201);
+      const targetUserId = signupRes.body.id;
+      
+      // Make user not private so we can view their profile
+      await prisma.users.update({
+        where: { id: targetUserId },
+        data: { isPrivate: false },
+      });
+
+      const res = await request(app)
+        .get(`/users/${targetUserId}`)
+        .set("Authorization", `Bearer ${sessionToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("profilePhoto", photoUrl);
+      expect(res.body.firstName).toBe("PhotoUser");
     });
 
     it("returns correct field structure for extended profile", async () => {
@@ -552,7 +590,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("lastName");
       expect(res.body).toHaveProperty("username");
       expect(res.body).toHaveProperty("gender");
-      expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus");
       expect(res.body).toHaveProperty("requestType");
@@ -586,7 +624,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("firstName");
       expect(res.body).toHaveProperty("lastName");
       expect(res.body).toHaveProperty("username");
-      expect(res.body).toHaveProperty("photo");
+      expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("connectionStatus");
       expect(res.body).toHaveProperty("requestType");
       
@@ -598,6 +636,45 @@ describe("profile endpoints", () => {
       expect(res.body).not.toHaveProperty("password");
       expect(res.body).not.toHaveProperty("email");
       expect(res.body).not.toHaveProperty("isPrivate");
+    });
+
+    it("returns profilePhoto key after upload via POST /users/me/photo", async () => {
+      const { userId, token } = await createUserAndGetToken();
+      
+      // Simulate photo upload - set the profilePhoto key
+      const photoKey = `photos/${userId}/1234567890.jpg`;
+      
+      const updateRes = await request(app)
+        .post("/users/me/photo")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ key: photoKey });
+      
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body).toHaveProperty("profilePhoto", photoKey);
+      
+      // Now fetch the user's own profile and verify the key is stored
+      const profileRes = await request(app)
+        .get(`/users/${userId}`)
+        .set("Authorization", `Bearer ${token}`);
+      
+      expect(profileRes.status).toBe(200);
+      expect(profileRes.body).toHaveProperty("profilePhoto", photoKey);
+      
+      console.log("✅ Photo key stored and retrieved successfully:", photoKey);
+    });
+
+    it("rejects invalid photo key (wrong user prefix)", async () => {
+      const { userId, token } = await createUserAndGetToken();
+      
+      // Try to set a photo key with wrong userId
+      const invalidKey = `photos/differentuser/1234567890.jpg`;
+      
+      const updateRes = await request(app)
+        .post("/users/me/photo")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ key: invalidKey });
+      
+      expect(updateRes.status).toBe(403);
     });
   });
 });

@@ -66,7 +66,7 @@ router.get("/search/users", auth, async (req, res) => {
         username: true,
         firstName: true,
         lastName: true,
-        photo: true,
+        profilePhoto: true,
       }
     });
 

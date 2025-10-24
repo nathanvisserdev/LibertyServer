@@ -59,7 +59,7 @@ router.post("/availability", async (req, res) => {
 router.post("/signup", async (req, res) => {
   const { 
     email, password, firstName, lastName, username, dateOfBirth, gender,
-    phoneNumber, photo, about, isPaid 
+    phoneNumber, profilePhoto, about, isPaid 
   } = req.body ?? {};
   
   // Reject isPaid field if present in request body
@@ -135,10 +135,10 @@ router.post("/signup", async (req, res) => {
     }
   }
 
-  if (photo !== undefined && photo !== null) {
-    const photoStr = String(photo).trim();
+  if (profilePhoto !== undefined && profilePhoto !== null) {
+    const photoStr = String(profilePhoto).trim();
     if (photoStr.length > 0 && photoStr.length > 500) {
-      return res.status(400).json({ error: "photo must be at most 500 characters" });
+      return res.status(400).json({ error: "profilePhoto must be at most 500 characters" });
     }
   }
 
@@ -163,8 +163,8 @@ router.post("/signup", async (req, res) => {
       if (phoneNumber !== undefined && phoneNumber !== null && String(phoneNumber).trim().length > 0) {
         userData.phoneNumber = String(phoneNumber).trim();
       }
-      if (photo !== undefined && photo !== null && String(photo).trim().length > 0) {
-        userData.photo = String(photo).trim();
+      if (profilePhoto !== undefined && profilePhoto !== null && String(profilePhoto).trim().length > 0) {
+        userData.profilePhoto = String(profilePhoto).trim();
       }
       if (about !== undefined && about !== null && String(about).trim().length > 0) {
         userData.about = String(about).trim();
@@ -181,7 +181,7 @@ router.post("/signup", async (req, res) => {
           dateOfBirth: true,
           gender: true,
           phoneNumber: true,
-          photo: true,
+          profilePhoto: true,
           about: true,
           createdAt: true,
           isPrivate: true,

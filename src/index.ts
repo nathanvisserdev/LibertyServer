@@ -19,6 +19,7 @@ import profileRouter from "./profile.js";
 import connectionsRouter from "./connections.js";
 import devicesRouter from "./devices.js";
 import mediaRouter from "./media.js";
+import mediaReadRouter from "./mediaRead.js";
 import { signupRouter } from "./signup.js";
 
 const app = express();
@@ -40,6 +41,7 @@ app.use(profileRouter);
 app.use(connectionsRouter);
 app.use(devicesRouter);
 app.use(mediaRouter);
+app.use(mediaReadRouter);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(process.env.PORT || 3000, () =>
