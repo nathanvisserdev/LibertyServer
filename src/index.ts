@@ -18,6 +18,7 @@ import searchRouter from "./search.js";
 import profileRouter from "./profile.js";
 import connectionsRouter from "./connections.js";
 import devicesRouter from "./devices.js";
+import mediaRouter from "./media.js";
 import { signupRouter } from "./signup.js";
 
 const app = express();
@@ -38,6 +39,7 @@ app.use(searchRouter);
 app.use(profileRouter);
 app.use(connectionsRouter);
 app.use(devicesRouter);
+app.use(mediaRouter);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(process.env.PORT || 3000, () =>
