@@ -338,7 +338,7 @@ describe("POST /signup", () => {
   it("201 created with optional photo field", async () => {
     const email = generateUniqueEmail('withphoto', testNamespace);
     const username = generateUniqueUsername();
-    const photo = "https://example.com/photo.jpg";
+    const profilePhoto = "https://example.com/photo.jpg";
     
     const res = await request(app)
       .post("/signup")
@@ -350,10 +350,10 @@ describe("POST /signup", () => {
         username,
         dateOfBirth: "1990-01-01",
         gender: "OTHER",
-        photo
+        profilePhoto
       });
     expect(res.status).toBe(201);
-    expect(res.body).toHaveProperty("photo", photo);
+    expect(res.body).toHaveProperty("profilePhoto", profilePhoto);
   });
 
   it("201 created with optional about field", async () => {
@@ -381,7 +381,7 @@ describe("POST /signup", () => {
     const email = generateUniqueEmail('allfields', testNamespace);
     const username = generateUniqueUsername();
     const phoneNumber = "+1-555-999-8888";
-    const photo = "https://example.com/avatar.png";
+    const profilePhoto = "https://example.com/avatar.png";
     const about = "Full profile with all fields!";
     
     const res = await request(app)
@@ -395,12 +395,12 @@ describe("POST /signup", () => {
         dateOfBirth: "1990-01-01",
         gender: "MALE",
         phoneNumber,
-        photo,
+        profilePhoto,
         about
       });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("phoneNumber", phoneNumber);
-    expect(res.body).toHaveProperty("photo", photo);
+    expect(res.body).toHaveProperty("profilePhoto", profilePhoto);
     expect(res.body).toHaveProperty("about", about);
   });
 

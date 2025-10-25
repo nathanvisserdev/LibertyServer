@@ -146,7 +146,7 @@ describe("search endpoints", () => {
         firstName: "Test",
         lastName: "User"
       });
-      expect(res.body.users[0]).toHaveProperty("photo");
+      expect(res.body.users[0]).toHaveProperty("profilePhoto");
     });
 
     it("searches users by full name (first last)", async () => {
@@ -412,7 +412,7 @@ describe("search endpoints", () => {
         expect(user).toHaveProperty("username");
         expect(user).toHaveProperty("firstName");
         expect(user).toHaveProperty("lastName");
-        expect(user).toHaveProperty("photo");
+        expect(user).toHaveProperty("profilePhoto");
       });
       
       // Check that groups have required fields

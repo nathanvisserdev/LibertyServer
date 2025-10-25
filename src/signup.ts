@@ -1,10 +1,13 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { prismaClient as prisma } from "./prismaClient.js";
 
 const router = Router();
 
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
+const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === 'test' ? 'test-jwt-secret' : '');
+if (!JWT_SECRET) throw new Error("Missing JWT_SECRET in .env");
 
 // --- Check username/email availability ---
 router.post("/availability", async (req, res) => {
@@ -31,13 +34,17 @@ router.post("/availability", async (req, res) => {
     // Query database to check if the field exists
     let existingUser;
     if (hasUsername) {
+      // Lowercase username for consistency
+      const usernameStr = String(username).toLowerCase().trim();
       existingUser = await prisma.users.findUnique({
-        where: { username },
+        where: { username: usernameStr },
         select: { id: true }
       });
     } else {
+      // Lowercase email for consistency
+      const emailStr = String(email).toLowerCase().trim();
       existingUser = await prisma.users.findUnique({
-        where: { email },
+        where: { email: emailStr },
         select: { id: true }
       });
     }
@@ -209,7 +216,13 @@ router.post("/signup", async (req, res) => {
       return user;
     });
 
-    res.status(201).json(result);
+    // Generate JWT token for the new user
+    const token = jwt.sign({ id: result.id }, JWT_SECRET, { expiresIn: "1h" });
+
+    res.status(201).json({
+      ...result,
+      accessToken: token
+    });
   } catch (err) {
     if (err instanceof Error && "code" in err) {
       if (err.code === "P2002") {

@@ -51,9 +51,11 @@ temp/
 /src/generated/prisma
 
 
+# -------------------------------------------------------
 # Prisma local artifacts
-prisma/dev.db
-prisma/dev.db-journal
+# -------------------------------------------------------
+prisma/**/*.db
+prisma/**/*.db-journal
 src/generated/
 node_modules/.cache/prisma/
 

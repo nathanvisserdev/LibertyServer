@@ -1,30 +1,30 @@
 import apn from "@parse/node-apn";
 import { prismaClient as prisma } from "./prismaClient.js";
-import fs from "fs";
-import path from "path";
 
-// Read the P8 key file if path is provided
-let apnKeyContent: string | undefined;
-if (process.env.APN_KEY_PATH) {
+// Read the P8 key from environment variable
+const apnKeyContent = process.env.APN_P8 || "";
+const isTestEnvironment = process.env.NODE_ENV === "test";
+
+// Only initialize APNs provider if we have a valid key or not in test environment
+let apnProvider: apn.Provider | null = null;
+
+if (apnKeyContent && apnKeyContent.includes("BEGIN PRIVATE KEY")) {
   try {
-    const keyPath = path.resolve(process.env.APN_KEY_PATH);
-    apnKeyContent = fs.readFileSync(keyPath, "utf8");
-    console.log("✅ APNs P8 key loaded successfully");
+    apnProvider = new apn.Provider({
+      token: {
+        key: apnKeyContent,
+        keyId: process.env.APN_KEY_ID || "",
+        teamId: process.env.APN_TEAM_ID || "",
+      },
+      production: process.env.NODE_ENV === "production",
+    });
+    console.log("✅ APNs P8 key loaded successfully from environment");
   } catch (error) {
-    console.error("❌ Failed to read APNs P8 key:", error);
+    console.error("❌ Failed to initialize APNs provider:", error);
   }
+} else if (!isTestEnvironment) {
+  console.warn("⚠️ APNs P8 key not found in environment - push notifications will be disabled");
 }
-
-// APNs Provider configuration using P8 key
-// Set environment variables: APN_KEY_ID, APN_TEAM_ID, APN_KEY_PATH, APN_BUNDLE_ID
-const apnProvider = new apn.Provider({
-  token: {
-    key: apnKeyContent || "", // File contents of .p8 file
-    keyId: process.env.APN_KEY_ID || "",
-    teamId: process.env.APN_TEAM_ID || "",
-  },
-  production: process.env.NODE_ENV === "production", // Use sandbox for development
-});
 
 /**
  * Send a connection request push notification to a user
@@ -54,6 +54,12 @@ export async function sendConnectionNotification(userId: string): Promise<void> 
     // If no device tokens, nothing to send
     if (updatedUser.deviceTokens.length === 0) {
       console.log(`⚠️ No device tokens found for user ${userId}`);
+      return;
+    }
+
+    // If APNs provider is not initialized, skip sending notifications
+    if (!apnProvider) {
+      console.log(`⚠️ APNs provider not initialized - skipping push notification for user ${userId}`);
       return;
     }
 

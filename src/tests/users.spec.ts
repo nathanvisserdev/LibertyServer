@@ -89,7 +89,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
         lastName: "Doe",
         dateOfBirth: "1990-01-01",
         gender: "MALE",
-        photo: "https://example.com/photo.jpg",
+        profilePhoto: "https://example.com/photo.jpg",
         about: "This is my bio"
       };
       
@@ -102,7 +102,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
       expect(res.body).toHaveProperty("firstName", "John");
       expect(res.body).toHaveProperty("lastName", "Doe");
       expect(res.body).toHaveProperty("gender", "MALE");
-      expect(res.body).toHaveProperty("photo", "https://example.com/photo.jpg");
+      expect(res.body).toHaveProperty("profilePhoto", "https://example.com/photo.jpg");
       expect(res.body).toHaveProperty("about", "This is my bio");
       expect(res.body).not.toHaveProperty("password");
     });
@@ -182,14 +182,14 @@ async function createUserAndGetToken(email?: string, password?: string) {
       }
     });
 
-    it("validates photo - rejects invalid URL", async () => {
+    it("validates profilePhoto - rejects invalid URL", async () => {
       const { userId, token } = await createUserAndGetToken();
       const res = await request(app)
         .patch(`/users/${userId}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ photo: "not-a-url" });
+        .send({ profilePhoto: "not-a-url" });
       expect(res.status).toBe(400);
-      expect(res.text).toContain("Invalid photo");
+      expect(res.text).toContain("Invalid profilePhoto");
     });
 
     it("validates about - rejects too long string", async () => {
@@ -202,14 +202,14 @@ async function createUserAndGetToken(email?: string, password?: string) {
       expect(res.text).toContain("Invalid about");
     });
 
-    it("allows empty photo string", async () => {
+    it("allows empty profilePhoto string", async () => {
       const { userId, token } = await createUserAndGetToken();
       const res = await request(app)
         .patch(`/users/${userId}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ photo: "" });
+        .send({ profilePhoto: "" });
       expect(res.status).toBe(200);
-      expect(res.body.photo).toBe(null);
+      expect(res.body.profilePhoto).toBe(null);
     });
 
     it("allows empty about string", async () => {

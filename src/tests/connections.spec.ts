@@ -279,7 +279,7 @@ describe("connections endpoints", () => {
       expect(res.body.connectionsList[0]).toHaveProperty('firstName');
       expect(res.body.connectionsList[0]).toHaveProperty('lastName');
       expect(res.body.connectionsList[0]).toHaveProperty('username');
-      expect(res.body.connectionsList[0]).toHaveProperty('photo');
+      expect(res.body.connectionsList[0]).toHaveProperty('profilePhoto');
       expect(res.body.connectionsList[0]).toHaveProperty('type');
       expect(res.body.connectionsList[0]).toHaveProperty('createdAt');
     });
@@ -896,7 +896,7 @@ describe("connections endpoints", () => {
       expect(requests[0].requester).toHaveProperty("firstName");
       expect(requests[0].requester).toHaveProperty("lastName");
       expect(requests[0].requester).toHaveProperty("username");
-      expect(requests[0].requester).toHaveProperty("photo");
+      expect(requests[0].requester).toHaveProperty("profilePhoto");
     });
 
     it("does not return requests where user is the requester", async () => {
