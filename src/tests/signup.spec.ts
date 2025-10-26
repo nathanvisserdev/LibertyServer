@@ -629,13 +629,15 @@ describe("POST /availability", () => {
       expect(res.body).toEqual({ available: true });
     });
 
-    it("handles empty string email", async () => {
+    it("returns 400 for empty string email", async () => {
       const res = await request(app)
         .post("/availability")
         .send({ email: "" });
 
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({ available: true });
+      // Empty string fails email format validation
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+      expect(res.body.error).toBe("Invalid email format");
     });
 
     it("handles null username gracefully", async () => {
@@ -670,16 +672,17 @@ describe("POST /availability", () => {
       expect(res.body).toHaveProperty("available");
     });
 
-    it("handles invalid email format", async () => {
+    it("returns 400 for invalid email format", async () => {
       const invalidEmail = "not-an-email";
 
       const res = await request(app)
         .post("/availability")
         .send({ email: invalidEmail });
 
-      // Should still check database, not validate format
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({ available: true });
+      // Now validates email format before checking database
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+      expect(res.body.error).toBe("Invalid email format");
     });
   });
 });

@@ -9,6 +9,13 @@ const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === 'test' ? 'test-jwt-secret' : '');
 if (!JWT_SECRET) throw new Error("Missing JWT_SECRET in .env");
 
+// Email validation regex
+const EMAIL_REGEX = /^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email);
+}
+
 // --- Check username/email availability ---
 router.post("/availability", async (req, res) => {
   try {
@@ -43,6 +50,14 @@ router.post("/availability", async (req, res) => {
     } else {
       // Lowercase email for consistency
       const emailStr = String(email).toLowerCase().trim();
+      
+      // Validate email format
+      if (!isValidEmail(emailStr)) {
+        return res.status(400).json({ 
+          error: "Invalid email format" 
+        });
+      }
+      
       existingUser = await prisma.users.findUnique({
         where: { email: emailStr },
         select: { id: true }
@@ -81,7 +96,7 @@ router.post("/signup", async (req, res) => {
 
   // Validate email format (basic)
   const emailStr = String(email).toLowerCase().trim();
-  if (!emailStr.includes("@") || emailStr.length < 3) {
+  if (!isValidEmail(emailStr)) {
     return res.status(400).json({ error: "Invalid email format" });
   }
 
