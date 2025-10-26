@@ -25,6 +25,7 @@ router.get("/search/users", auth, async (req, res) => {
     // Search Users
     let userWhere: any = {
       isBanned: false,
+      isHidden: false, // Exclude hidden users from search
     };
 
     // Check if query has 2+ tokens for full name search

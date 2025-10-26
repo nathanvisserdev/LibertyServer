@@ -1045,7 +1045,8 @@ describe("groups endpoints", () => {
       expect(res.body.members[0].user).toHaveProperty("username");
       expect(res.body.members[0].user).toHaveProperty("firstName");
       expect(res.body.members[0].user).toHaveProperty("lastName");
-      expect(res.body.members[0].user).toHaveProperty("email");
+      expect(res.body.members[0].user).not.toHaveProperty("email");
+      expect(res.body.members[0].user).not.toHaveProperty("password");
     });
 
     it("returns members ordered by joinedAt ascending", async () => {
@@ -1629,7 +1630,8 @@ describe("groups endpoints", () => {
       expect(mutualConnection.user).toHaveProperty("username");
       expect(mutualConnection.user).toHaveProperty("firstName");
       expect(mutualConnection.user).toHaveProperty("lastName");
-      expect(mutualConnection.user).toHaveProperty("email");
+      expect(mutualConnection.user).not.toHaveProperty("email");
+      expect(mutualConnection.user).not.toHaveProperty("password");
 
       // Verify both connections are included
       const connectionIds = returnedGroup.mutualConnections.map((conn: any) => conn.userId);
@@ -2130,7 +2132,8 @@ describe("groups endpoints", () => {
       expect(returnedRequest.requester).toHaveProperty("username");
       expect(returnedRequest.requester).toHaveProperty("firstName");
       expect(returnedRequest.requester).toHaveProperty("lastName");
-      expect(returnedRequest.requester).toHaveProperty("email");
+      expect(returnedRequest.requester).not.toHaveProperty("email");
+      expect(returnedRequest.requester).not.toHaveProperty("password");
     });
 
     it("returns empty array when no pending join group requests exist", async () => {

@@ -102,7 +102,6 @@ router.get("/groups/mutuals", auth, async (req, res) => {
             username: true,
             firstName: true,
             lastName: true,
-            email: true,
             isHidden: true,
             isBanned: true
           }
@@ -113,7 +112,6 @@ router.get("/groups/mutuals", auth, async (req, res) => {
             username: true,
             firstName: true,
             lastName: true,
-            email: true,
             isHidden: true,
             isBanned: true
           }
@@ -214,8 +212,7 @@ router.get("/groups/mutuals", auth, async (req, res) => {
                 id: true,
                 username: true,
                 firstName: true,
-                lastName: true,
-                email: true
+                lastName: true
               }
             }
           }
@@ -349,8 +346,7 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
             id: true,
             username: true,
             firstName: true,
-            lastName: true,
-            email: true
+            lastName: true
           }
         }
       },
@@ -626,8 +622,7 @@ router.get("/groups/:groupId/join-requests/pending", auth, async (req, res) => {
             id: true,
             username: true,
             firstName: true,
-            lastName: true,
-            email: true
+            lastName: true
           }
         }
       },
@@ -734,8 +729,7 @@ router.post("/groups/requests/:requestId/accept", auth, async (req, res) => {
             id: true,
             username: true,
             firstName: true,
-            lastName: true,
-            email: true
+            lastName: true
           }
         }
       }

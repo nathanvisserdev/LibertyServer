@@ -12,7 +12,27 @@ router.get("/user/me", auth, async (req, res) => {
   if (!payload || typeof payload !== "object" || !("id" in payload)) {
     return res.status(401).send("Invalid token payload");
   }
-  const user = await prisma.users.findUnique({ where: { id: (payload as any).id } });
+  const user = await prisma.users.findUnique({ 
+    where: { id: (payload as any).id },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+      email: true,
+      profilePhoto: true,
+      about: true,
+      gender: true,
+      dateOfBirth: true,
+      zipCode: true,
+      isPrivate: true,
+      isHidden: true,
+      isBanned: true,
+      createdAt: true,
+      updatedAt: true,
+      pendingRequestCount: true,
+    }
+  });
   if (!user) return res.status(404).send("User not found");
   res.json(user);
 });

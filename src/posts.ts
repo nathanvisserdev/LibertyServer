@@ -119,7 +119,13 @@ router.get("/feed", auth, async (req, res) => {
       userId: p.userId,
       content: p.content,
       createdAt: p.createdAt,
-      user: { id: p.user.id, email: p.user.email },
+      user: { 
+        id: p.user.id, 
+        username: p.user.username,
+        firstName: p.user.firstName,
+        lastName: p.user.lastName,
+        profilePhoto: p.user.profilePhoto
+      },
       relation: toRelation(p.userId),
     }))
   );

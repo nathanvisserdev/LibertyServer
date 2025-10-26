@@ -274,7 +274,11 @@ describe("posts endpoints", () => {
       expect(res.body[0]).toHaveProperty("relation", "SELF");
       expect(res.body[0]).toHaveProperty("user");
       expect(res.body[0].user).toHaveProperty("id", userId);
-      expect(res.body[0].user).toHaveProperty("email");
+      expect(res.body[0].user).toHaveProperty("username");
+      expect(res.body[0].user).toHaveProperty("firstName");
+      expect(res.body[0].user).toHaveProperty("lastName");
+      expect(res.body[0].user).not.toHaveProperty("email");
+      expect(res.body[0].user).not.toHaveProperty("password");
     });
 
     it("orders posts by creation date (newest first)", async () => {
@@ -351,7 +355,11 @@ describe("posts endpoints", () => {
       expect(post).toHaveProperty("relation");
       
       expect(post.user).toHaveProperty("id");
-      expect(post.user).toHaveProperty("email");
+      expect(post.user).toHaveProperty("username");
+      expect(post.user).toHaveProperty("firstName");
+      expect(post.user).toHaveProperty("lastName");
+      expect(post.user).not.toHaveProperty("email");
+      expect(post.user).not.toHaveProperty("password");
       
       // Verify data types
       expect(typeof post.id).toBe("string");
@@ -359,7 +367,7 @@ describe("posts endpoints", () => {
       expect(typeof post.content).toBe("string");
       expect(typeof post.createdAt).toBe("string");
       expect(typeof post.user.id).toBe("string");
-      expect(typeof post.user.email).toBe("string");
+      expect(typeof post.user.username).toBe("string");
       expect(typeof post.relation).toBe("string");
     });
 
@@ -467,7 +475,7 @@ describe("posts endpoints", () => {
     });
 
     it("includes user information in feed posts", async () => {
-      const { token, userId, email } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       await request(app)
         .post("/posts")
@@ -483,7 +491,11 @@ describe("posts endpoints", () => {
       
       const post = res.body[0];
       expect(post.user.id).toBe(userId);
-      expect(post.user.email).toBe(email);
+      expect(post.user).toHaveProperty("username");
+      expect(post.user).toHaveProperty("firstName");
+      expect(post.user).toHaveProperty("lastName");
+      expect(post.user).not.toHaveProperty("email");
+      expect(post.user).not.toHaveProperty("password");
     });
   });
 
