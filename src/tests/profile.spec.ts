@@ -28,7 +28,9 @@ async function createUserAndGetToken(email?: string, password?: string, username
       lastName: "User",
       username: userUsername,
       dateOfBirth: "1990-01-01",
-      gender: "MALE"
+      gender: "MALE",
+      profilePhoto: "https://example.com/photo.jpg",
+      isPrivate: true
     });
   
   const loginRes = await request(app)
@@ -507,15 +509,14 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("profilePhoto");
     });
 
-    it("handles null profilePhoto and about fields correctly", async () => {
+    it("always returns profilePhoto since it's required", async () => {
       const { token: sessionToken } = await createUserAndGetToken();
       const { userId: targetUserId } = await createUserAndGetToken();
       
-      // Update target user to have null profilePhoto and about
+      // Update target user to have null about (profilePhoto is required so can't be null)
       await prisma.users.update({
         where: { id: targetUserId },
         data: { 
-          profilePhoto: null,
           about: null,
           isPrivate: false
         },
@@ -526,7 +527,7 @@ describe("profile endpoints", () => {
         .set("Authorization", `Bearer ${sessionToken}`);
       
       expect(res.status).toBe(200);
-      expect(res.body.profilePhoto).toBe(null);
+      expect(res.body.profilePhoto).toBeTruthy(); // profilePhoto is required
       expect(res.body.about).toBe(null);
     });
 
@@ -547,7 +548,8 @@ describe("profile endpoints", () => {
           username: generateUniqueUsername(),
           dateOfBirth: "1995-05-15",
           gender: "FEMALE",
-          profilePhoto: photoUrl
+          profilePhoto: photoUrl,
+          isPrivate: false
         });
       
       expect(signupRes.status).toBe(201);

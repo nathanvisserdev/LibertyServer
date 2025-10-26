@@ -39,7 +39,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "MALE"
+        gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("id");
@@ -49,8 +51,9 @@ describe("POST /signup", () => {
     expect(res.body).toHaveProperty("lastName", "User");
     expect(res.body).toHaveProperty("dateOfBirth");
     expect(res.body).toHaveProperty("gender", "MALE");
+    expect(res.body).toHaveProperty("profilePhoto", "https://example.com/photo.jpg");
+    expect(res.body).toHaveProperty("isPrivate", true);
     expect(res.body).toHaveProperty("createdAt");
-    expect(res.body).toHaveProperty("isPrivate");
     expect(res.body).not.toHaveProperty("password");
     expect(res.body).not.toHaveProperty("isPaid"); // Should never be in response
   });
@@ -78,7 +81,9 @@ describe("POST /signup", () => {
         firstName: "Test", 
         lastName: "User", 
         username,
-        gender: "FEMALE"
+        gender: "FEMALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -98,7 +103,9 @@ describe("POST /signup", () => {
         firstName: "Test", 
         lastName: "User", 
         username,
-        dateOfBirth: "1990-01-01"
+        dateOfBirth: "1990-01-01",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -119,7 +126,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "OTHER"
+        gender: "OTHER",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: false
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -138,7 +147,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username: "AB", // too short and uppercase
         dateOfBirth: "1990-01-01",
-        gender: "PREFER_NOT_TO_SAY"
+        gender: "OTHER",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -159,6 +170,8 @@ describe("POST /signup", () => {
         username: generateUniqueUsername(),
         dateOfBirth: "1990-01-01",
         gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true,
         isPaid: true // This should be rejected
       });
     expect(res1.status).toBe(400);
@@ -177,6 +190,8 @@ describe("POST /signup", () => {
         username: generateUniqueUsername(),
         dateOfBirth: "1990-01-01",
         gender: "FEMALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: false,
         isPaid: false // This should also be rejected
       });
     expect(res2.status).toBe(400);
@@ -197,7 +212,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username: generateUniqueUsername(),
         dateOfBirth: "1990-01-01",
-        gender: "MALE"
+        gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
 
     // Try to create second user with same email
@@ -210,7 +227,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username: generateUniqueUsername(),
         dateOfBirth: "1990-01-01",
-        gender: "FEMALE"
+        gender: "FEMALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: false
       });
     
     expect(res.status).toBe(409);
@@ -231,7 +250,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "MALE"
+        gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
 
     // Try to create second user with same username
@@ -244,7 +265,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "FEMALE"
+        gender: "FEMALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: false
       });
     
     expect(res.status).toBe(409);
@@ -265,7 +288,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "not-a-date",
-        gender: "MALE"
+        gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -287,7 +312,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: recentDate.toISOString().split('T')[0],
-        gender: "MALE"
+        gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -307,7 +334,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "INVALID_GENDER"
+        gender: "INVALID_GENDER",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -329,13 +358,15 @@ describe("POST /signup", () => {
         username,
         dateOfBirth: "1990-01-01",
         gender: "FEMALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true,
         phoneNumber
       });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("phoneNumber", phoneNumber);
   });
 
-  it("201 created with optional photo field", async () => {
+  it("201 created with profilePhoto field", async () => {
     const email = generateUniqueEmail('withphoto', testNamespace);
     const username = generateUniqueUsername();
     const profilePhoto = "https://example.com/photo.jpg";
@@ -350,7 +381,8 @@ describe("POST /signup", () => {
         username,
         dateOfBirth: "1990-01-01",
         gender: "OTHER",
-        profilePhoto
+        profilePhoto,
+        isPrivate: false
       });
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("profilePhoto", profilePhoto);
@@ -370,7 +402,9 @@ describe("POST /signup", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "PREFER_NOT_TO_SAY",
+        gender: "OTHER",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true,
         about
       });
     expect(res.status).toBe(201);
@@ -394,8 +428,9 @@ describe("POST /signup", () => {
         username,
         dateOfBirth: "1990-01-01",
         gender: "MALE",
-        phoneNumber,
         profilePhoto,
+        isPrivate: false,
+        phoneNumber,
         about
       });
     expect(res.status).toBe(201);
@@ -419,6 +454,8 @@ describe("POST /signup", () => {
         username,
         dateOfBirth: "1990-01-01",
         gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true,
         about: longAbout
       });
     expect(res.status).toBe(400);
@@ -475,7 +512,7 @@ describe("POST /availability", () => {
       const uniqueEmail = generateUniqueEmail("existing", testNamespace);
       const uniqueUsername = generateUniqueUsername(testNamespace);
 
-      await request(app)
+      const signupRes = await request(app)
         .post("/signup")
         .send({
           email: uniqueEmail,
@@ -484,8 +521,14 @@ describe("POST /availability", () => {
           lastName: "User",
           username: uniqueUsername,
           dateOfBirth: "1990-01-01",
-          gender: "MALE"
+          gender: "MALE",
+          profilePhoto: "https://example.com/photo.jpg",
+          isPrivate: true
         });
+      
+      // Verify signup succeeded
+      expect(signupRes.status).toBe(201);
+      expect(signupRes.body).toHaveProperty("id");
 
       // Then check if the username is available
       const res = await request(app)
@@ -514,7 +557,7 @@ describe("POST /availability", () => {
       const uniqueEmail = generateUniqueEmail("existing2", testNamespace);
       const uniqueUsername = generateUniqueUsername(testNamespace);
 
-      await request(app)
+      const signupRes = await request(app)
         .post("/signup")
         .send({
           email: uniqueEmail,
@@ -523,8 +566,14 @@ describe("POST /availability", () => {
           lastName: "User",
           username: uniqueUsername,
           dateOfBirth: "1990-01-01",
-          gender: "FEMALE"
+          gender: "FEMALE",
+          profilePhoto: "https://example.com/photo.jpg",
+          isPrivate: true
         });
+      
+      // Verify signup succeeded
+      expect(signupRes.status).toBe(201);
+      expect(signupRes.body).toHaveProperty("id");
 
       // Then check if the email is available
       const res = await request(app)
@@ -577,7 +626,9 @@ describe("POST /availability", () => {
           lastName: "User",
           username: baseUsername.toLowerCase(),
           dateOfBirth: "1990-01-01",
-          gender: "MALE"
+          gender: "MALE",
+          profilePhoto: "https://example.com/photo.jpg",
+          isPrivate: true
         });
 
       // Check with uppercase version
@@ -605,7 +656,9 @@ describe("POST /availability", () => {
           lastName: "User",
           username: uniqueUsername,
           dateOfBirth: "1990-01-01",
-          gender: "OTHER"
+          gender: "OTHER",
+          profilePhoto: "https://example.com/photo.jpg",
+          isPrivate: true
         });
 
       // Check with uppercase version

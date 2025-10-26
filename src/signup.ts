@@ -81,7 +81,7 @@ router.post("/availability", async (req, res) => {
 router.post("/signup", async (req, res) => {
   const { 
     email, password, firstName, lastName, username, dateOfBirth, gender,
-    phoneNumber, profilePhoto, about, isPaid 
+    phoneNumber, profilePhoto, about, isPrivate, isPaid 
   } = req.body ?? {};
   
   // Reject isPaid field if present in request body
@@ -90,8 +90,8 @@ router.post("/signup", async (req, res) => {
   }
   
   // Check required fields
-  if (!email || !password || !firstName || !lastName || !username || !dateOfBirth || !gender) {
-    return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName, username, dateOfBirth, gender" });
+  if (!email || !password || !firstName || !lastName || !username || !dateOfBirth || !gender || !profilePhoto || isPrivate === undefined) {
+    return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName, username, dateOfBirth, gender, profilePhoto, isPrivate" });
   }
 
   // Validate email format (basic)
@@ -136,10 +136,10 @@ router.post("/signup", async (req, res) => {
   }
 
   // Validate gender (must be one of the valid enum values)
-  const validGenders = ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'];
+  const validGenders = ['MALE', 'FEMALE', 'OTHER'];
   const genderStr = String(gender).toUpperCase();
   if (!validGenders.includes(genderStr)) {
-    return res.status(400).json({ error: "Invalid gender value. Must be one of: MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY" });
+    return res.status(400).json({ error: "Invalid gender value. Must be one of: MALE, FEMALE, OTHER" });
   }
 
   // Validate optional fields
@@ -157,11 +157,18 @@ router.post("/signup", async (req, res) => {
     }
   }
 
-  if (profilePhoto !== undefined && profilePhoto !== null) {
-    const photoStr = String(profilePhoto).trim();
-    if (photoStr.length > 0 && photoStr.length > 500) {
-      return res.status(400).json({ error: "profilePhoto must be at most 500 characters" });
-    }
+  // Validate profilePhoto (required)
+  const photoStr = String(profilePhoto).trim();
+  if (photoStr.length === 0) {
+    return res.status(400).json({ error: "profilePhoto is required" });
+  }
+  if (photoStr.length > 500) {
+    return res.status(400).json({ error: "profilePhoto must be at most 500 characters" });
+  }
+
+  // Validate isPrivate (required boolean)
+  if (typeof isPrivate !== "boolean") {
+    return res.status(400).json({ error: "isPrivate must be a boolean value" });
   }
 
   try {
@@ -178,15 +185,14 @@ router.post("/signup", async (req, res) => {
         username: usernameStr,
         dateOfBirth: dobDate,
         gender: genderStr,
+        profilePhoto: photoStr,
+        isPrivate: isPrivate,
         isPaid: false, // Explicitly set to false (cannot be set by client)
       };
 
       // Add optional fields if provided
       if (phoneNumber !== undefined && phoneNumber !== null && String(phoneNumber).trim().length > 0) {
         userData.phoneNumber = String(phoneNumber).trim();
-      }
-      if (profilePhoto !== undefined && profilePhoto !== null && String(profilePhoto).trim().length > 0) {
-        userData.profilePhoto = String(profilePhoto).trim();
       }
       if (about !== undefined && about !== null && String(about).trim().length > 0) {
         userData.about = String(about).trim();

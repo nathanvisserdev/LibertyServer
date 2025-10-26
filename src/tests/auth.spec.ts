@@ -39,7 +39,9 @@ describe("auth endpoints", () => {
         lastName: "User", 
         username,
         dateOfBirth: "1990-01-01",
-        gender: "MALE"
+        gender: "MALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     const res = await request(app)
       .post("/login")
@@ -60,7 +62,9 @@ describe("auth endpoints", () => {
         lastName: "User", 
         username: username,
         dateOfBirth: "1990-01-01",
-        gender: "FEMALE"
+        gender: "FEMALE",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: false
       });
     const res = await request(app)
       .post("/login")
@@ -82,7 +86,9 @@ describe("auth endpoints", () => {
         lastName: "User", 
         username: username,
         dateOfBirth: "1990-01-01",
-        gender: "OTHER"
+        gender: "OTHER",
+        profilePhoto: "https://example.com/photo.jpg",
+        isPrivate: true
       });
     
     const loginRes = await request(app)

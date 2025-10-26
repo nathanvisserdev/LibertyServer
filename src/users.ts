@@ -85,18 +85,25 @@ router.patch("/users/:id", auth, async (req, res) => {
   }
 
   if (gender !== undefined) {
-    const validGenders = ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"] as const;
+    const validGenders = ["MALE", "FEMALE", "OTHER"] as const;
     if (typeof gender !== "string" || !validGenders.includes(gender as any)) {
-      return res.status(400).send("Invalid gender: must be MALE, FEMALE, OTHER, or PREFER_NOT_TO_SAY");
+      return res.status(400).send("Invalid gender: must be MALE, FEMALE, or OTHER");
     }
     updateData.gender = gender;
   }
 
   if (profilePhoto !== undefined) {
-    if (typeof profilePhoto !== "string" || (profilePhoto.trim().length > 0 && !profilePhoto.match(/^https?:\/\/.+/))) {
-      return res.status(400).send("Invalid profilePhoto: must be a valid URL or empty string");
+    if (typeof profilePhoto !== "string") {
+      return res.status(400).send("Invalid profilePhoto: must be a string");
     }
-    updateData.profilePhoto = profilePhoto.trim() || null;
+    const trimmed = profilePhoto.trim();
+    if (trimmed.length === 0) {
+      return res.status(400).send("Invalid profilePhoto: cannot be empty (profilePhoto is required)");
+    }
+    if (!trimmed.match(/^https?:\/\/.+/)) {
+      return res.status(400).send("Invalid profilePhoto: must be a valid URL");
+    }
+    updateData.profilePhoto = trimmed;
   }
 
   if (about !== undefined) {

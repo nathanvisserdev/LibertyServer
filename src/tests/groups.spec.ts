@@ -28,7 +28,9 @@ async function createUserAndGetToken(isPaid?: boolean, email?: string, password?
       lastName: "User",
       username: userUsername,
       dateOfBirth: "1990-01-01",
-      gender: "PREFER_NOT_TO_SAY"
+      gender: "OTHER",
+      profilePhoto: "https://example.com/photo.jpg",
+      isPrivate: true
     });
   
   // Validate signup response

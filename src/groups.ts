@@ -249,10 +249,10 @@ router.get("/groups/mutuals", auth, async (req, res) => {
     // Sort by member count (ascending - least to most)
     result.sort((a, b) => a.memberCount - b.memberCount);
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
     console.error("Error fetching mutual groups:", error);
-    res.status(500).send("Internal server error");
+    return res.status(500).send("Internal server error");
   }
 });
 

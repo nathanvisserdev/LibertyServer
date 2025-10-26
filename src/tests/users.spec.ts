@@ -28,7 +28,9 @@ async function createUserAndGetToken(email?: string, password?: string) {
       lastName: "User",
       username: username,
       dateOfBirth: "1990-01-01",
-      gender: "FEMALE"
+      gender: "FEMALE",
+      profilePhoto: "https://example.com/photo.jpg",
+      isPrivate: true
     });
   
   const loginRes = await request(app)
@@ -170,7 +172,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
     });
 
     it("validates gender - accepts all valid enum values", async () => {
-      const validGenders = ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"];
+      const validGenders = ["MALE", "FEMALE", "OTHER"];
       for (const gender of validGenders) {
         const { userId, token } = await createUserAndGetToken();
         const res = await request(app)
@@ -202,14 +204,13 @@ async function createUserAndGetToken(email?: string, password?: string) {
       expect(res.text).toContain("Invalid about");
     });
 
-    it("allows empty profilePhoto string", async () => {
+    it("rejects empty profilePhoto string", async () => {
       const { userId, token } = await createUserAndGetToken();
       const res = await request(app)
         .patch(`/users/${userId}`)
         .set("Authorization", `Bearer ${token}`)
         .send({ profilePhoto: "" });
-      expect(res.status).toBe(200);
-      expect(res.body.profilePhoto).toBe(null);
+      expect(res.status).toBe(400);
     });
 
     it("allows empty about string", async () => {

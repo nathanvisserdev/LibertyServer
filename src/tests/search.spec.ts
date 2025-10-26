@@ -63,7 +63,9 @@ async function createUserAndGetToken(
       lastName: lastName,
       username: userUsername,
       dateOfBirth: "1990-01-01",
-      gender: "PREFER_NOT_TO_SAY",
+      gender: "OTHER",
+      profilePhoto: "https://example.com/photo.jpg",
+      isPrivate: true,
       bio: bio || "Test bio"
     });
   

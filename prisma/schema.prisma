@@ -12,7 +12,6 @@ enum Gender {
   MALE
   FEMALE
   OTHER
-  PREFER_NOT_TO_SAY
 }
 
 enum RequestType {
@@ -112,16 +111,16 @@ model Users {
   lastName      String?
   username      String?   @unique
   dateOfBirth   DateTime?
-  gender        Gender?
+  gender        Gender
   phoneNumber   String?
   zipCode       String?
-  profilePhoto  String?
+  profilePhoto  String
   about         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // privacy & account state
-  isPrivate     Boolean   @default(true)
+  isPrivate     Boolean
   isHidden      Boolean   @default(false)
   isPaid        Boolean   @default(false)
   isBanned      Boolean   @default(false)
