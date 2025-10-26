@@ -102,6 +102,7 @@ router.get("/users/:id", auth, async (req, res) => {
         gender: targetUser.gender,
         profilePhoto: targetUser.profilePhoto,
         about: targetUser.about,
+        isPrivate: targetUser.isPrivate,
         connectionStatus: connectionStatus,
         requestType: requestType,
       });
@@ -114,6 +115,7 @@ router.get("/users/:id", auth, async (req, res) => {
         lastName: targetUser.lastName,
         username: targetUser.username,
         profilePhoto: targetUser.profilePhoto,
+        isPrivate: targetUser.isPrivate,
         connectionStatus: connectionStatus,
         requestType: requestType,
       });
