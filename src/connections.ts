@@ -446,8 +446,8 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
   }
 });
 
-// --- DELETE /connections/:requestId/decline ---
-router.delete("/connections/:requestId/decline", auth, async (req, res) => {
+// --- POST /connections/:requestId/decline ---
+router.post("/connections/:requestId/decline", auth, async (req, res) => {
   if (!req.user) {
     return res.status(401).send("Invalid token payload");
   }

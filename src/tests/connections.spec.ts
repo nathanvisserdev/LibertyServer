@@ -1492,10 +1492,10 @@ describe("connections endpoints", () => {
     });
   });
 
-  describe("DELETE /connections/:requestId/decline", () => {
+  describe("POST /connections/:requestId/decline", () => {
     it("returns 401 unauthorized without authentication token", async () => {
       const res = await request(app)
-        .delete("/connections/fake-id/decline");
+        .post("/connections/fake-id/decline");
       
       expect(res.status).toBe(401);
     });
@@ -1505,7 +1505,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user.id);
 
       const res = await request(app)
-        .delete("/connections/invalid-id/decline")
+        .post("/connections/invalid-id/decline")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(404); // Invalid ID will result in "Connection request not found"
@@ -1517,7 +1517,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user.id);
 
       const res = await request(app)
-        .delete("/connections/nonexistent-id/decline")
+        .post("/connections/nonexistent-id/decline")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(404);
@@ -1543,7 +1543,7 @@ describe("connections endpoints", () => {
       // Try to decline with the requester's token (should fail)
       const token = getAuthToken(requester.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(403);
@@ -1568,7 +1568,7 @@ describe("connections endpoints", () => {
 
       const token = getAuthToken(requested.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(409);
@@ -1592,7 +1592,7 @@ describe("connections endpoints", () => {
 
       const token = getAuthToken(requested.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(404);
@@ -1619,7 +1619,7 @@ describe("connections endpoints", () => {
 
       const token = getAuthToken(requested.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(404);
@@ -1643,7 +1643,7 @@ describe("connections endpoints", () => {
 
       const token = getAuthToken(requested.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
@@ -1687,7 +1687,7 @@ describe("connections endpoints", () => {
 
       const token = getAuthToken(requested.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
@@ -1717,7 +1717,7 @@ describe("connections endpoints", () => {
 
       const token = getAuthToken(requested.id);
       const res = await request(app)
-        .delete(`/connections/${connectionRequest.id}/decline`)
+        .post(`/connections/${connectionRequest.id}/decline`)
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);

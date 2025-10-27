@@ -596,11 +596,11 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("about");
       expect(res.body).toHaveProperty("connectionStatus");
       expect(res.body).toHaveProperty("requestType");
+      expect(res.body).toHaveProperty("isPrivate");
       
       // Should not have sensitive fields
       expect(res.body).not.toHaveProperty("password");
       expect(res.body).not.toHaveProperty("email");
-      expect(res.body).not.toHaveProperty("isPrivate");
       expect(res.body).not.toHaveProperty("isBanned");
       expect(res.body).not.toHaveProperty("isHidden");
     });
@@ -629,6 +629,7 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("connectionStatus");
       expect(res.body).toHaveProperty("requestType");
+      expect(res.body).toHaveProperty("isPrivate");
       
       // Should not have extended fields
       expect(res.body).not.toHaveProperty("gender");
@@ -637,7 +638,6 @@ describe("profile endpoints", () => {
       // Should not have sensitive fields
       expect(res.body).not.toHaveProperty("password");
       expect(res.body).not.toHaveProperty("email");
-      expect(res.body).not.toHaveProperty("isPrivate");
     });
 
     it("returns profilePhoto key after upload via POST /users/me/photo", async () => {

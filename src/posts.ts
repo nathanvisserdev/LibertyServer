@@ -273,7 +273,7 @@ router.delete("/posts/:postId", auth, async (req, res) => {
       where: { id: postId },
     });
 
-    res.status(204).end();
+    return res.status(204).end();
   } catch (e) {
     console.error(e);
     if (e instanceof Error && e.message.includes("Record to delete does not exist")) {
