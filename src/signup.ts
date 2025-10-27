@@ -226,14 +226,6 @@ router.post("/signup", async (req, res) => {
         },
       });
 
-      // 3. Add user to their own group via GroupMember
-      await tx.groupMember.create({
-        data: {
-          userId: user.id,
-          groupId: group.id,
-        },
-      });
-
       return user;
     });
 
