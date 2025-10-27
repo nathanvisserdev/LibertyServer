@@ -720,37 +720,57 @@ router.get("/groups/:groupId/join-requests/pending", auth, async (req, res) => {
   }
 
   try {
-    // Check if user is a member of the group
-    const groupMember = await prisma.groupMember.findUnique({
+    // Check if the group exists and get the admin ID
+    const group = await prisma.groups.findUnique({
       where: {
-        userId_groupId: {
+        id: groupId
+      },
+      select: {
+        id: true,
+        adminId: true
+      }
+    });
+
+    if (!group) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if user is the group admin
+    const isAdmin = group.adminId === userId;
+
+    if (!isAdmin) {
+      // If not admin, check if user is a member of the group
+      const groupMember = await prisma.groupMember.findUnique({
+        where: {
+          userId_groupId: {
+            userId: userId,
+            groupId: groupId
+          }
+        }
+      });
+
+      // If not a member, return 404
+      if (!groupMember) {
+        return res.status(404).send("Not found");
+      }
+
+      // If member is banned, return 403
+      if (groupMember.isBanned) {
+        return res.status(403).send("Forbidden");
+      }
+
+      // Check if user is a moderator in the RoundTable
+      const roundTableMember = await prisma.roundTableMember.findFirst({
+        where: {
           userId: userId,
           groupId: groupId
         }
+      });
+
+      // If not in RoundTable or not a moderator, return 403
+      if (!roundTableMember || !roundTableMember.isModerator) {
+        return res.status(403).send("Forbidden");
       }
-    });
-
-    // If not a member, return 404
-    if (!groupMember) {
-      return res.status(404).send("Not found");
-    }
-
-    // If member is banned, return 403
-    if (groupMember.isBanned) {
-      return res.status(403).send("Forbidden");
-    }
-
-    // Check if user is a moderator in the RoundTable
-    const roundTableMember = await prisma.roundTableMember.findFirst({
-      where: {
-        userId: userId,
-        groupId: groupId
-      }
-    });
-
-    // If not in RoundTable or not a moderator, return 403
-    if (!roundTableMember || !roundTableMember.isModerator) {
-      return res.status(403).send("Forbidden");
     }
 
     // Get pending join requests for the group
