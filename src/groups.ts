@@ -765,6 +765,78 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
   }
 
   try {
+    // Get requester's connections
+    const connections = await prisma.connections.findMany({
+      where: {
+        OR: [
+          { requesterId: requesterId },
+          { requestedId: requesterId }
+        ]
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            isHidden: true,
+            isBanned: true
+          }
+        },
+        requested: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            isHidden: true,
+            isBanned: true
+          }
+        }
+      }
+    });
+
+    // Extract connection user IDs (excluding current user)
+    const connectionUserIds = connections
+      .map(conn => conn.requesterId === requesterId ? conn.requestedId : conn.requesterId)
+      .filter(id => id !== requesterId);
+
+    // Get blocks to filter out blocked users
+    const blocks = await prisma.blocks.findMany({
+      where: {
+        OR: [
+          { blockerId: requesterId },
+          { blockedId: requesterId }
+        ]
+      }
+    });
+
+    const blockedUserIds = new Set(
+      blocks.map(block => 
+        block.blockerId === requesterId ? block.blockedId : block.blockerId
+      )
+    );
+
+    // Filter connections to exclude hidden, banned, or blocked users
+    const validConnectionUserIds = connectionUserIds.filter(connId => {
+      if (blockedUserIds.has(connId)) return false;
+      
+      const connection = connections.find(conn => 
+        (conn.requesterId === requesterId && conn.requestedId === connId) ||
+        (conn.requestedId === requesterId && conn.requesterId === connId)
+      );
+      
+      if (!connection) return false;
+      
+      const connectedUser = connection.requesterId === requesterId ? connection.requested : connection.requester;
+      
+      // Exclude hidden or banned users
+      if (connectedUser.isHidden || connectedUser.isBanned) return false;
+      
+      return true;
+    });
+
     // Get all groups where the target user is a member (not banned)
     const memberships = await prisma.groupMember.findMany({
       where: {
@@ -809,6 +881,30 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
         createdAt: 'desc'
       }
     });
+
+    // Get groups where requester's mutual connections are admins
+    const mutualAdminGroups = validConnectionUserIds.length > 0 
+      ? await prisma.groups.findMany({
+          where: {
+            adminId: { in: validConnectionUserIds },
+            isHidden: false,
+            groupType: { notIn: ["PERSONAL"] }
+          },
+          include: {
+            admin: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        })
+      : [];
 
     // Filter groups based on visibility rules
     const visibleGroups = memberships.filter((membership: any) => {
@@ -900,10 +996,32 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
       };
     });
 
-    // Combine both lists and remove duplicates (in case user is both admin and member)
+    // Format the response for mutual admin groups
+    const formattedMutualAdminGroups = mutualAdminGroups.map((group: any) => {
+      let displayLabel = "Social Circle";
+      if (group.groupType === "PUBLIC") {
+        displayLabel = `${group.name} public assembly room`;
+      } else if (group.groupType === "PRIVATE") {
+        displayLabel = `${group.name} private assembly room`;
+      }
+
+      return {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        groupType: group.groupType,
+        isHidden: group.isHidden,
+        adminId: group.adminId,
+        admin: group.admin,
+        displayLabel: displayLabel,
+        joinedAt: group.createdAt
+      };
+    });
+
+    // Combine all lists and remove duplicates (in case user is both admin and member)
     const allGroupsMap = new Map();
     
-    [...memberGroups, ...formattedAdminGroups].forEach((group: any) => {
+    [...memberGroups, ...formattedAdminGroups, ...formattedMutualAdminGroups].forEach((group: any) => {
       if (!allGroupsMap.has(group.id)) {
         allGroupsMap.set(group.id, group);
       }
