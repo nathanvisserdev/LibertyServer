@@ -751,4 +751,173 @@ router.post("/groups/requests/:requestId/accept", auth, async (req, res) => {
   }
 });
 
+// --- Get User's Groups ---
+router.get("/users/:userId/groups", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const requesterId = me.id;
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) {
+    return res.status(400).send("Missing user ID");
+  }
+
+  try {
+    // Get all groups where the target user is a member (not banned)
+    const memberships = await prisma.groupMember.findMany({
+      where: {
+        userId: targetUserId,
+        isBanned: false
+      },
+      include: {
+        group: {
+          include: {
+            admin: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        joinedAt: 'desc'
+      }
+    });
+
+    // Get all groups where the target user is the admin
+    const adminGroups = await prisma.groups.findMany({
+      where: {
+        adminId: targetUserId
+      },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Filter groups based on visibility rules
+    const visibleGroups = memberships.filter((membership: any) => {
+      const group = membership.group;
+
+      // Filter out PERSONAL groups if requester is not the owner
+      if (group.groupType === "PERSONAL" && group.adminId !== requesterId) {
+        return false;
+      }
+
+      // Filter out hidden groups unless requester is admin or member
+      if (group.isHidden) {
+        const isAdmin = group.adminId === requesterId;
+        // Check if requester is a member of this group
+        const isMember = memberships.some((m: any) => m.groupId === group.id && m.userId === requesterId);
+        
+        if (!isAdmin && !isMember) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Filter admin groups based on visibility rules
+    const visibleAdminGroups = adminGroups.filter((group: any) => {
+      // Filter out PERSONAL groups if requester is not the owner
+      if (group.groupType === "PERSONAL" && group.adminId !== requesterId) {
+        return false;
+      }
+
+      // Filter out hidden groups unless requester is admin or member
+      if (group.isHidden) {
+        const isAdmin = group.adminId === requesterId;
+        // Check if requester is a member of this group
+        const isMember = memberships.some((m: any) => m.groupId === group.id && m.userId === requesterId);
+        
+        if (!isAdmin && !isMember) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Format the response for membership groups
+    const memberGroups = visibleGroups.map((membership: any) => {
+      const group = membership.group;
+      
+      let displayLabel = "Social Circle";
+      if (group.groupType === "PUBLIC") {
+        displayLabel = `${group.name} public assembly room`;
+      } else if (group.groupType === "PRIVATE") {
+        displayLabel = `${group.name} private assembly room`;
+      }
+
+      return {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        groupType: group.groupType,
+        isHidden: group.isHidden,
+        adminId: group.adminId,
+        admin: group.admin,
+        displayLabel: displayLabel,
+        joinedAt: membership.joinedAt
+      };
+    });
+
+    // Format the response for admin groups
+    const formattedAdminGroups = visibleAdminGroups.map((group: any) => {
+      let displayLabel = "Social Circle";
+      if (group.groupType === "PUBLIC") {
+        displayLabel = `${group.name} public assembly room`;
+      } else if (group.groupType === "PRIVATE") {
+        displayLabel = `${group.name} private assembly room`;
+      }
+
+      return {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        groupType: group.groupType,
+        isHidden: group.isHidden,
+        adminId: group.adminId,
+        admin: group.admin,
+        displayLabel: displayLabel,
+        joinedAt: group.createdAt // Use createdAt for admin groups since they don't have a membership joinedAt
+      };
+    });
+
+    // Combine both lists and remove duplicates (in case user is both admin and member)
+    const allGroupsMap = new Map();
+    
+    [...memberGroups, ...formattedAdminGroups].forEach((group: any) => {
+      if (!allGroupsMap.has(group.id)) {
+        allGroupsMap.set(group.id, group);
+      }
+    });
+
+    const groups = Array.from(allGroupsMap.values()).sort((a: any, b: any) => {
+      return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime();
+    });
+
+    res.json({ groups });
+  } catch (error) {
+    console.error("Error in GET /users/:userId/groups:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
