@@ -142,6 +142,7 @@ router.get("/feed", auth, async (req, res) => {
       id: p.id,
       userId: p.userId,
       content: p.content,
+      media: p.media,
       createdAt: p.createdAt,
       user: { 
         id: p.user.id, 
