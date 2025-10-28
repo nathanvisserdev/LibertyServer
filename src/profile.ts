@@ -92,7 +92,25 @@ router.get("/users/:id", auth, async (req, res) => {
 
     // Build response based on privacy and connection status
     if (isConnected || !targetUser.isPrivate) {
-      // Connected or target is not private - show extended profile
+      // Connected or target is not private - show extended profile with posts
+      const posts = await prisma.posts.findMany({
+        where: {
+          userId: targetUserId,
+          visibility: { in: ["PUBLIC", "GROUP"] }
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          content: true,
+          media: true,
+          orientation: true,
+          createdAt: true,
+          visibility: true,
+          groupId: true,
+          userId: true,
+        }
+      });
+
       console.log("📸 Returning profile with photo:", targetUser.profilePhoto);
       return res.status(200).json({
         id: targetUser.id,
@@ -105,6 +123,7 @@ router.get("/users/:id", auth, async (req, res) => {
         isPrivate: targetUser.isPrivate,
         connectionStatus: connectionStatus,
         requestType: requestType,
+        posts: posts,
       });
     } else {
       // Target is private and not connected - show minimal profile
