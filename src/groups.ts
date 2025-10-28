@@ -794,10 +794,10 @@ router.get("/groups/:groupId/join-requests/pending", auth, async (req, res) => {
       }
     });
 
-    res.json(pendingRequests);
+    return res.json(pendingRequests);
   } catch (error) {
     console.error("Error fetching pending join requests:", error);
-    res.status(500).send("Internal server error");
+    return res.status(500).send("Internal server error");
   }
 });
 
@@ -1194,10 +1194,10 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
       return new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime();
     });
 
-    res.json({ groups });
+    return res.json({ groups });
   } catch (error) {
     console.error("Error in GET /users/:userId/groups:", error);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

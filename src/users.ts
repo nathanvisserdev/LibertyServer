@@ -34,7 +34,7 @@ router.get("/user/me", auth, async (req, res) => {
     }
   });
   if (!user) return res.status(404).send("User not found");
-  res.json(user);
+  return res.json(user);
 });
 
 // --- Update user by ID (authenticated user can only update themselves) ---

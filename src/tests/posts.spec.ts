@@ -76,7 +76,10 @@ describe("posts endpoints", () => {
         .send({});
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid content");
+      expect(res.body).toEqual({ 
+        error: "INVALID_POST_CONTENT", 
+        message: "Post must include text or media." 
+      });
     });
 
     it("returns 400 bad request when content is empty string", async () => {
@@ -88,7 +91,10 @@ describe("posts endpoints", () => {
         .send({ content: "" });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid content");
+      expect(res.body).toEqual({ 
+        error: "INVALID_POST_CONTENT", 
+        message: "Post must include text or media." 
+      });
     });
 
     it("returns 400 bad request when content is only whitespace", async () => {
@@ -100,7 +106,10 @@ describe("posts endpoints", () => {
         .send({ content: "   \n\t   " });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid content");
+      expect(res.body).toEqual({ 
+        error: "INVALID_POST_CONTENT", 
+        message: "Post must include text or media." 
+      });
     });
 
     it("returns 400 bad request when content exceeds 500 characters", async () => {
@@ -113,7 +122,7 @@ describe("posts endpoints", () => {
         .send({ content: longContent });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid content");
+      expect(res.text).toBe("Content must be 500 characters or less");
     });
 
     it("returns 404 not foundwhen user is not found", async () => {

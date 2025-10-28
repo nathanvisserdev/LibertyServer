@@ -32,7 +32,7 @@ router.post("/media/presign-read", auth, async (req, res) => {
     
     console.log(`📸 Generated presigned read URL for key: ${key}, expires at: ${new Date(expiresAt).toISOString()}`);
     
-    res.json({ url, expiresAt });
+    return res.json({ url, expiresAt });
   } catch (error) {
     console.error("Error generating presigned read URL:", error);
     return res.status(500).send("Failed to generate presigned URL");

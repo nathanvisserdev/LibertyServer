@@ -114,12 +114,12 @@ router.get("/search/users", auth, async (req, res) => {
       isHidden: g.isHidden,
     }));
 
-    res.json({ users, groups });
+    return res.json({ users, groups });
   } catch (e) {
     if (e instanceof Error) {
-      res.status(400).json({ error: e.message });
+      return res.status(400).json({ error: e.message });
     } else {
-      res.status(400).json({ error: String(e) });
+      return res.status(400).json({ error: String(e) });
     }
   }
 });

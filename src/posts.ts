@@ -11,10 +11,23 @@ router.post("/posts", auth, async (req, res) => {
     return res.status(401).send("Invalid token payload");
   }
   const me = req.user as any;
-  const { content, groupId } = req.body ?? {};
+  const { content, media, groupId } = req.body ?? {};
 
-  const text = String(content ?? "").trim();
-  if (!text || text.length > 500) return res.status(400).send("Invalid content");
+  // Validate that at least one of content or media is provided
+  const text = content ? String(content).trim() : null;
+  const mediaKey = media ? String(media).trim() : null;
+
+  if (!text && !mediaKey) {
+    return res.status(400).json({ 
+      error: "INVALID_POST_CONTENT", 
+      message: "Post must include text or media." 
+    });
+  }
+
+  // Validate content length if provided
+  if (text && text.length > 500) {
+    return res.status(400).send("Content must be 500 characters or less");
+  }
 
   // Optional: block banned users from posting
   const meRow = await prisma.users.findUnique({ where: { id: me.id }, select: { isBanned: true } });
@@ -22,11 +35,19 @@ router.post("/posts", auth, async (req, res) => {
   if (meRow.isBanned) return res.status(403).send("account banned");
 
   try {
+    // Prepare post data
+    const postData: any = {
+      userId: me.id,
+      content: text || null,
+      media: mediaKey || null,
+    };
+
     // No groupId -> public post
     if (!groupId) {
+      postData.visibility = "PUBLIC";
       const post = await prisma.posts.create({
-        data: { userId: me.id, content: text, visibility: "PUBLIC" },
-        select: { id: true, content: true, createdAt: true, userId: true, groupId: true, visibility: true },
+        data: postData,
+        select: { id: true, content: true, media: true, createdAt: true, userId: true, groupId: true, visibility: true },
       });
       return res.status(201).json(post);
     }
@@ -55,9 +76,12 @@ router.post("/posts", auth, async (req, res) => {
       if (!member) return res.status(403).send("Not a member of this group");
     }
 
+    postData.groupId = group.id;
+    postData.visibility = "GROUP"; // force GROUP visibility
+
     const post = await prisma.posts.create({
-      data: { userId: me.id, groupId: group.id, content: text, visibility: "GROUP" }, // force GROUP visibility
-      select: { id: true, content: true, createdAt: true, userId: true, groupId: true, visibility: true },
+      data: postData,
+      select: { id: true, content: true, media: true, createdAt: true, userId: true, groupId: true, visibility: true },
     });
     return res.status(201).json(post);
   } catch (e) {

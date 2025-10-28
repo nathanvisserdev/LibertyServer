@@ -119,34 +119,22 @@ model Users {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  // privacy & account state
   isPrivate     Boolean
   isHidden      Boolean   @default(false)
   isPaid        Boolean   @default(false)
   isBanned      Boolean   @default(false)
 
-  // content
   posts         Posts[]
-
-  // group membership
   groups        GroupMember[]
 
-  // requests
   outgoingRequests ConnectionRequest[] @relation("req_outgoing")
   incomingRequests ConnectionRequest[] @relation("req_incoming")
-
-  // connections (finalized)
   following Connections[] @relation("conn_outgoing")
   followers Connections[] @relation("conn_incoming")
-
-  // blocks
   blocksInitiated Blocks[] @relation("blocks_blocker")
   blocksReceived  Blocks[] @relation("blocks_blocked")
 
-  // groups this user administers
   adminGroups Groups[] @relation("GroupAdmin")
-
-  // group invites and join requests
   sentInvites     GroupInvite[] @relation("Invite_Inviter")
   receivedInvites GroupInvite[] @relation("Invite_Invitee")
   decidedInvites  GroupInvite[] @relation("Invite_Decider")
@@ -157,7 +145,6 @@ model Users {
   preferredReviewerFor   JoinGroup[] @relation("Join_PreferredReviewer")
   vouchedJoinRequests    JoinGroup[] @relation("Join_Voucher")
 
-  // round table relations
   roundTableAdmin     RoundTable[] @relation("RoundTable_Admin")
   roundTableViceChair RoundTable[] @relation("RoundTable_Vice")
   roundTableMemberships RoundTableMember[]
@@ -168,7 +155,6 @@ model Users {
   // device tokens for push notifications
   deviceTokens DeviceToken[] @relation("UserDeviceTokens")
 
-  // count of pending connection requests
   pendingRequestCount Int @default(0)
 
   @@index([isPaid])
@@ -405,10 +391,11 @@ model RoundTableContinuity {
 
 model Posts {
   id          String         @id @default(cuid())
-  content     String
+  content     String?
   createdAt   DateTime       @default(now())
   userId      String
   groupId     String?
+  media       String?
   visibility  PostVisibility @default(PUBLIC)
 
   user  Users   @relation(fields: [userId], references: [id])
