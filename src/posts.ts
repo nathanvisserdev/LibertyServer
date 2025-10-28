@@ -11,7 +11,7 @@ router.post("/posts", auth, async (req, res) => {
     return res.status(401).send("Invalid token payload");
   }
   const me = req.user as any;
-  const { content, media, groupId } = req.body ?? {};
+  const { content, media, groupId, imageWidth, imageHeight } = req.body ?? {};
 
   // Validate that at least one of content or media is provided
   const text = content ? String(content).trim() : null;
@@ -29,6 +29,14 @@ router.post("/posts", auth, async (req, res) => {
     return res.status(400).send("Content must be 500 characters or less");
   }
 
+  // Calculate orientation if image dimensions are provided
+  let orientation: "LANDSCAPE" | "PORTRAIT" | null = null;
+  if (mediaKey && imageWidth && imageHeight) {
+    const width = Number(imageWidth);
+    const height = Number(imageHeight);
+    orientation = height > width ? "PORTRAIT" : "LANDSCAPE";
+  }
+
   // Optional: block banned users from posting
   const meRow = await prisma.users.findUnique({ where: { id: me.id }, select: { isBanned: true } });
   if (!meRow) return res.status(404).send("User not found");
@@ -40,6 +48,7 @@ router.post("/posts", auth, async (req, res) => {
       userId: me.id,
       content: text || null,
       media: mediaKey || null,
+      orientation: orientation,
     };
 
     // No groupId -> public post
@@ -143,6 +152,7 @@ router.get("/feed", auth, async (req, res) => {
       userId: p.userId,
       content: p.content,
       media: p.media,
+      orientation: p.orientation,
       createdAt: p.createdAt,
       user: { 
         id: p.user.id, 

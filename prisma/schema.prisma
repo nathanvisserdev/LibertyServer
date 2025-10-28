@@ -99,8 +99,13 @@ enum VoteChoice {
 
 enum PostVisibility {
   PUBLIC        // shows in Public Square if not in PRIVATE/PERSONAL group
-  CONNECTIONS   // author’s connections only
+  CONNECTIONS   // author's connections only
   GROUP         // governed by group membership
+}
+
+enum MediaOrientation {
+  LANDSCAPE
+  PORTRAIT
 }
 
 model Users {
@@ -390,13 +395,14 @@ model RoundTableContinuity {
 }
 
 model Posts {
-  id          String         @id @default(cuid())
+  id          String              @id @default(cuid())
   content     String?
-  createdAt   DateTime       @default(now())
+  createdAt   DateTime            @default(now())
   userId      String
   groupId     String?
   media       String?
-  visibility  PostVisibility @default(PUBLIC)
+  orientation MediaOrientation?
+  visibility  PostVisibility      @default(PUBLIC)
 
   user  Users   @relation(fields: [userId], references: [id])
   group Groups? @relation(fields: [groupId], references: [id])
