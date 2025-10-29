@@ -196,22 +196,41 @@ router.post("/signup", async (req, res) => {
       userData.about = String(about).trim();
     }
 
-    const result = await prisma.user.create({
-      data: userData,
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        dateOfBirth: true,
-        gender: true,
-        phoneNumber: true,
-        profilePhoto: true,
-        about: true,
-        createdAt: true,
-        isPrivate: true,
-      },
+    // Use transaction to create user and default subnet
+    const result = await prisma.$transaction(async (tx: any) => {
+      // Create the user
+      const newUser = await tx.user.create({
+        data: userData,
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          dateOfBirth: true,
+          gender: true,
+          phoneNumber: true,
+          profilePhoto: true,
+          about: true,
+          createdAt: true,
+          isPrivate: true,
+        },
+      });
+
+      // Create default "Social Circle" subnet
+      await tx.subNet.create({
+        data: {
+          name: "Social Circle",
+          slug: "social-circle",
+          description: "Your default social circle",
+          visibility: "PRIVATE",
+          isDefault: true,
+          ownerId: newUser.id,
+          ordering: 0,
+        },
+      });
+
+      return newUser;
     });
 
     // Generate JWT token for the new user

@@ -58,6 +58,43 @@ describe("POST /signup", () => {
     expect(res.body).not.toHaveProperty("isPaid"); // Should never be in response
   });
 
+  it("201 created and default 'Social Circle' subnet is created", async () => {
+    const email = generateUniqueEmail('subnet-test', testNamespace);
+    const username = generateUniqueUsername();
+    const res = await request(app)
+      .post("/signup")
+      .send({ 
+        email, 
+        password: "testpass123", 
+        firstName: "Test", 
+        lastName: "User", 
+        username,
+        dateOfBirth: "1990-01-01",
+        gender: "MALE",
+        isPrivate: false,
+        profilePhoto: "https://example.com/photo.jpg"
+      });
+    expect(res.status).toBe(201);
+    const userId = res.body.id;
+    expect(userId).toBeDefined();
+
+    // Verify the default subnet was created
+    const subnet = await prisma.subNet.findFirst({
+      where: {
+        ownerId: userId,
+        isDefault: true
+      }
+    });
+    
+    expect(subnet).not.toBeNull();
+    expect(subnet?.name).toBe("Social Circle");
+    expect(subnet?.slug).toBe("social-circle");
+    expect(subnet?.description).toBe("Your default social circle");
+    expect(subnet?.visibility).toBe("PRIVATE");
+    expect(subnet?.isDefault).toBe(true);
+    expect(subnet?.ordering).toBe(0);
+  });
+
   it("400 bad request when missing required fields", async () => {
     const uniqueEmail = generateUniqueEmail('test');
     
