@@ -64,12 +64,12 @@ router.post("/posts", auth, async (req, res) => {
     // With groupId -> validate group & membership policy
     const group = await prisma.groups.findUnique({
       where: { id: String(groupId) },
-      select: { id: true, groupType: true },
+      select: { id: true, groupPrivacy: true },
     });
     if (!group) return res.status(404).send("Group not found");
 
     // Membership required for PRIVATE or PERSONAL; PUBLIC can be open-post (policy choice)
-    if (group.groupType === "PRIVATE" || group.groupType === "PERSONAL") {
+    if (group.groupPrivacy === "PRIVATE" || group.groupPrivacy === "PERSONAL") {
       const member = await prisma.groupMember.findUnique({
         where: { userId_groupId: { userId: me.id, groupId: group.id } },
         select: { membershipId: true },

@@ -744,14 +744,6 @@ router.post("/groups", auth, async (req, res) => {
       adminId: me.id,
     };
 
-    // Add Round Table specific fields
-    if (String(groupType).toUpperCase() === "ROUND_TABLE") {
-      groupData.viceChairId = viceChairId;
-      if (electionCycle) {
-        groupData.electionCycle = String(electionCycle).toUpperCase();
-      }
-    }
-
     const group = await prisma.groups.create({
       data: groupData,
       select: {
@@ -760,22 +752,36 @@ router.post("/groups", auth, async (req, res) => {
         groupType: true,
         groupPrivacy: true,
         isHidden: true,
-        viceChairId: true,
-        electionCycle: true,
       },
     });
 
-    // For Round Table groups, create GroupAdmin entries for the selected admins
-    if (String(groupType).toUpperCase() === "ROUND_TABLE" && admins && Array.isArray(admins)) {
-      const adminEntries = admins.map((admin: any) => ({
-        groupId: group.id,
-        userId: admin.userId,
-        isModerator: admin.isModerator ?? false,
-      }));
-
-      await prisma.groupAdmin.createMany({
-        data: adminEntries,
+    // For Round Table groups, create RoundTable record and RoundTableMember entries
+    if (String(groupType).toUpperCase() === "ROUND_TABLE") {
+      // Create RoundTable record
+      await prisma.roundTable.create({
+        data: {
+          groupId: group.id,
+          adminId: me.id,
+          viceChairId: viceChairId,
+          roundTableType: "ROUND_TABLE",
+          electionsEnabled: electionCycle ? true : false,
+          electionCycle: electionCycle ? String(electionCycle).toUpperCase() : null,
+        },
       });
+
+      // Create RoundTableMember entries for the selected admins
+      if (admins && Array.isArray(admins)) {
+        const adminEntries = admins.map((admin: any) => ({
+          groupId: group.id,
+          userId: admin.userId,
+          role: "CHAIRPERSON", // Default role for board members
+          isModerator: admin.isModerator ?? false,
+        }));
+
+        await prisma.roundTableMember.createMany({
+          data: adminEntries,
+        });
+      }
     }
     
     res.status(201).json(group);
