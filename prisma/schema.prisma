@@ -58,6 +58,7 @@ enum RoundTableRole {
 }
 
 enum ElectionCycle {
+  THREE_MONTHS
   SIX_MONTHS
   ONE_YEAR
   TWO_YEARS
@@ -185,7 +186,8 @@ model Groups {
   description String?
   createdAt   DateTime  @default(now())
 
-  groupType   GroupPrivacy @default(PRIVATE)
+  groupType   GroupType        @default(AUTOCRATIC)
+  groupPrivacy GroupPrivacy    @default(PRIVATE)
 
   isHidden    Boolean      @default(false)
   membershipHidden Boolean @default(false)
@@ -208,6 +210,7 @@ model Groups {
   roundTableContinuity RoundTableContinuity[]
 
   @@index([groupType])
+  @@index([groupPrivacy])
   @@index([adminId])
   @@unique([adminId, name])
 }

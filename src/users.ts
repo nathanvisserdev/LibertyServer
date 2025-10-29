@@ -292,10 +292,10 @@ router.delete("/user/me", auth, async (req, res) => {
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(401).send("invalid credentials");
 
-  // Exclude PERSONAL from the admin check so users aren’t blocked by their Social Circle
+  // Exclude PERSONAL from the admin check so users aren't blocked by their Social Circle
   const adminGroups = await prisma.groups.findMany({
-    where: { adminId: me, groupType: { not: "PERSONAL" } },
-    select: { id: true }, // don't select groupType unless you need it
+    where: { adminId: me, groupPrivacy: { not: "PERSONAL" } },
+    select: { id: true },
   });
 
   const force = String(req.query.force || "").toLowerCase() === "true";
@@ -310,7 +310,7 @@ router.delete("/user/me", auth, async (req, res) => {
     await prisma.$transaction(async tx => {
       // Always delete the user's PERSONAL group(s) (Social Circle) and their content
       const personal = await tx.groups.findMany({
-        where: { adminId: me, groupType: "PERSONAL" },
+        where: { adminId: me, groupPrivacy: "PERSONAL" },
         select: { id: true },
       });
       if (personal.length) {

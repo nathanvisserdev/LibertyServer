@@ -174,59 +174,44 @@ router.post("/signup", async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     
-    // Use Prisma transaction to create user, group, and roster entry
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Create the user
-      const userData: any = {
-        email: emailStr,
-        password: passwordHash,
-        firstName: firstNameStr,
-        lastName: lastNameStr,
-        username: usernameStr,
-        dateOfBirth: dobDate,
-        gender: genderStr,
-        profilePhoto: photoStr,
-        isPrivate: isPrivate,
-        isPaid: false, // Explicitly set to false (cannot be set by client)
-      };
+    // Create the user
+    const userData: any = {
+      email: emailStr,
+      password: passwordHash,
+      firstName: firstNameStr,
+      lastName: lastNameStr,
+      username: usernameStr,
+      dateOfBirth: dobDate,
+      gender: genderStr,
+      profilePhoto: photoStr,
+      isPrivate: isPrivate,
+      isPaid: false, // Explicitly set to false (cannot be set by client)
+    };
 
-      // Add optional fields if provided
-      if (phoneNumber !== undefined && phoneNumber !== null && String(phoneNumber).trim().length > 0) {
-        userData.phoneNumber = String(phoneNumber).trim();
-      }
-      if (about !== undefined && about !== null && String(about).trim().length > 0) {
-        userData.about = String(about).trim();
-      }
+    // Add optional fields if provided
+    if (phoneNumber !== undefined && phoneNumber !== null && String(phoneNumber).trim().length > 0) {
+      userData.phoneNumber = String(phoneNumber).trim();
+    }
+    if (about !== undefined && about !== null && String(about).trim().length > 0) {
+      userData.about = String(about).trim();
+    }
 
-      const user = await tx.users.create({
-        data: userData,
-        select: {
-          id: true,
-          email: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          dateOfBirth: true,
-          gender: true,
-          phoneNumber: true,
-          profilePhoto: true,
-          about: true,
-          createdAt: true,
-          isPrivate: true,
-        },
-      });
-
-      // 2. Create their PERSONAL "Social Circle" group
-      const group = await tx.groups.create({
-        data: {
-          name: "Social Circle",
-          description: "Your personal group",
-          groupType: "PERSONAL",
-          adminId: user.id,
-        },
-      });
-
-      return user;
+    const result = await prisma.users.create({
+      data: userData,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        dateOfBirth: true,
+        gender: true,
+        phoneNumber: true,
+        profilePhoto: true,
+        about: true,
+        createdAt: true,
+        isPrivate: true,
+      },
     });
 
     // Generate JWT token for the new user

@@ -245,7 +245,8 @@ describe("search endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({
           name: groupName,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC",
+          groupPrivacy: "PUBLIC"
         });
       
       expect(groupRes.status).toBe(201);
@@ -260,33 +261,10 @@ describe("search endpoints", () => {
       expect(res.body.groups[0]).toMatchObject({
         id: groupRes.body.id,
         name: groupName,
-        groupType: "PUBLIC",
+        groupType: "AUTOCRATIC",
+        groupPrivacy: "PUBLIC",
         isHidden: false
       });
-    });
-
-    it("excludes other users' PERSONAL groups", async () => {
-      const { token: token1 } = await createUserAndGetToken();
-      const { token: token2 } = await createUserAndGetToken();
-      
-      // Search for "Social" (PERSONAL groups are named "Social Circle")
-      const res1 = await request(app)
-        .get("/search/users")
-        .set("Authorization", `Bearer ${token1}`)
-        .query({ q: "Social" });
-      
-      const res2 = await request(app)
-        .get("/search/users")
-        .set("Authorization", `Bearer ${token2}`)
-        .query({ q: "Social" });
-      
-      expect(res1.status).toBe(200);
-      expect(res2.status).toBe(200);
-      
-      // Each user should only see their own Social Circle
-      expect(res1.body.groups).toHaveLength(1);
-      expect(res2.body.groups).toHaveLength(1);
-      expect(res1.body.groups[0].id).not.toBe(res2.body.groups[0].id);
     });
 
     it("excludes hidden groups for non-members", async () => {
@@ -299,7 +277,8 @@ describe("search endpoints", () => {
         .set("Authorization", `Bearer ${adminToken}`)
         .send({
           name: "Secret Society",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC",
+          groupPrivacy: "PRIVATE",
           isHidden: true
         });
       
@@ -324,7 +303,8 @@ describe("search endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({
           name: "Admin Secret Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC",
+          groupPrivacy: "PRIVATE",
           isHidden: true
         });
       
@@ -354,7 +334,8 @@ describe("search endpoints", () => {
         .set("Authorization", `Bearer ${adminToken}`)
         .send({
           name: "Member Secret Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC",
+          groupPrivacy: "PRIVATE",
           isHidden: true
         });
       
@@ -396,7 +377,8 @@ describe("search endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({
           name: `${searchTerm} Group`,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC",
+          groupPrivacy: "PUBLIC"
         });
       
       const res = await request(app)

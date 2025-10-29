@@ -167,14 +167,14 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           description: "A test public group"
         });
       
       expect(res.status).toBe(201);
       expect(res.body).toHaveProperty("id");
       expect(res.body).toHaveProperty("name", groupName);
-      expect(res.body).toHaveProperty("groupType", "PUBLIC");
+      expect(res.body).toHaveProperty("groupPrivacy", "PUBLIC");
       expect(res.body).toHaveProperty("isHidden", false);
     });
 
@@ -187,14 +187,14 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           description: "A test private group"
         });
       
       expect(res.status).toBe(201);
       expect(res.body).toHaveProperty("id");
       expect(res.body).toHaveProperty("name", groupName);
-      expect(res.body).toHaveProperty("groupType", "PRIVATE");
+      expect(res.body).toHaveProperty("groupPrivacy", "PRIVATE");
       expect(res.body).toHaveProperty("isHidden", false);
     });
 
@@ -207,7 +207,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         });
       
       expect(res.status).toBe(201);
@@ -223,7 +223,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           isHidden: false // Should be ignored/allowed
         });
       
@@ -240,7 +240,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true // Should be rejected
         });
       
@@ -256,7 +256,7 @@ describe("groups endpoints", () => {
         .post("/groups")
         .set("Authorization", `Bearer ${token}`)
         .send({ 
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
           // Missing name
         });
       
@@ -271,7 +271,23 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: generateUniqueString("Test Group", testNamespace),
-          groupType: "INVALID"
+          groupType: "AUTOCRATIC",
+          groupPrivacy: "INVALID"
+        });
+      
+      expect(res.status).toBe(400);
+    });
+    
+    it("validates groupType field", async () => {
+      const { token } = await createUserAndGetToken(false);
+      
+      const res = await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          name: generateUniqueString("Test Group", testNamespace),
+          groupType: "INVALID",
+          groupPrivacy: "PUBLIC"
         });
       
       expect(res.status).toBe(400);
@@ -282,7 +298,7 @@ describe("groups endpoints", () => {
         .post("/groups")
         .send({ 
           name: generateUniqueString("Test Group", testNamespace),
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         });
       
       expect(res.status).toBe(401);
@@ -297,11 +313,11 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "public" // lowercase
+          groupType: "AUTOCRATIC", groupPrivacy: "public" // lowercase
         });
       
       expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty("groupType", "PUBLIC"); // should be uppercase in response
+      expect(res.body).toHaveProperty("groupPrivacy", "PUBLIC"); // should be uppercase in response
     });
 
     it("converts name to string", async () => {
@@ -313,7 +329,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupNumber, // number instead of string
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         });
       
       expect(res.status).toBe(201);
@@ -329,7 +345,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         });
       
       expect(res.status).toBe(201);
@@ -345,7 +361,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           description: ""
         });
       
@@ -362,14 +378,14 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true // Should be allowed for paid users
         });
       
       expect(res.status).toBe(201);
       expect(res.body).toHaveProperty("id");
       expect(res.body).toHaveProperty("name", groupName);
-      expect(res.body).toHaveProperty("groupType", "PRIVATE");
+      expect(res.body).toHaveProperty("groupPrivacy", "PRIVATE");
       expect(res.body).toHaveProperty("isHidden", true);
     });
 
@@ -382,7 +398,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           isHidden: false // Explicitly set to false
         });
       
@@ -399,7 +415,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: groupName, 
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
           // isHidden not specified
         });
       
@@ -409,33 +425,6 @@ describe("groups endpoints", () => {
   });
 
   describe("GET /groups", () => {
-    it("returns visible groups for unpaid user", async () => {
-      const { token } = await createUserAndGetToken(false);
-      
-      // Create a public group
-      await request(app)
-        .post("/groups")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ 
-          name: generateUniqueString("Public Group", testNamespace), 
-          groupType: "PUBLIC"
-        });
-
-      const res = await request(app)
-        .get("/groups")
-        .set("Authorization", `Bearer ${token}`);
-      
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      
-      // Should include the public group and user's personal "Social Circle"
-      const publicGroups = res.body.filter((g: any) => g.groupType === "PUBLIC");
-      const personalGroups = res.body.filter((g: any) => g.groupType === "PERSONAL");
-      
-      expect(publicGroups.length).toBeGreaterThan(0);
-      expect(personalGroups.length).toBeGreaterThan(0); // User's own Social Circle
-    });
-
     it("filters out hidden groups for non-members", async () => {
       const { token: paidToken } = await createUserAndGetToken(true); // Paid user to create hidden group
       const { token: unpaidToken } = await createUserAndGetToken(false); // Unpaid user to test filtering
@@ -446,7 +435,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${paidToken}`)
         .send({ 
           name: generateUniqueString("Hidden Group", testNamespace), 
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true
         });
       
@@ -472,7 +461,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: generateUniqueString("Admin Hidden Group", testNamespace), 
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true
         });
       
@@ -501,7 +490,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${adminToken}`)
         .send({ 
           name: generateUniqueString("Member Hidden Group", testNamespace), 
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true
         });
       
@@ -528,34 +517,6 @@ describe("groups endpoints", () => {
       expect(foundHiddenGroup.isHidden).toBe(true);
     });
 
-    it("filters out other users' PERSONAL groups", async () => {
-      const { token: token1 } = await createUserAndGetToken(false);
-      const { token: token2 } = await createUserAndGetToken(false);
-
-      // Get groups for first user
-      const res1 = await request(app)
-        .get("/groups")
-        .set("Authorization", `Bearer ${token1}`);
-      
-      // Get groups for second user  
-      const res2 = await request(app)
-        .get("/groups")
-        .set("Authorization", `Bearer ${token2}`);
-      
-      expect(res1.status).toBe(200);
-      expect(res2.status).toBe(200);
-
-      const personalGroups1 = res1.body.filter((g: any) => g.groupType === "PERSONAL");
-      const personalGroups2 = res2.body.filter((g: any) => g.groupType === "PERSONAL");
-
-      // Each user should only see their own personal group
-      expect(personalGroups1.length).toBe(1);
-      expect(personalGroups2.length).toBe(1);
-      
-      // The personal groups should be different
-      expect(personalGroups1[0].id).not.toBe(personalGroups2[0].id);
-    });
-
     it("includes proper displayLabel for different group types", async () => {
       const { token } = await createUserAndGetToken(false);
       
@@ -565,7 +526,7 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: "Test Public", 
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         });
 
       await request(app)
@@ -573,7 +534,15 @@ describe("groups endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ 
           name: "Test Private", 
-          groupType: "PRIVATE"
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE"
+        });
+
+      await request(app)
+        .post("/groups")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ 
+          name: "Test Personal", 
+          groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL"
         });
 
       const res = await request(app)
@@ -584,7 +553,7 @@ describe("groups endpoints", () => {
       
       const publicGroup = res.body.find((g: any) => g.name === "Test Public");
       const privateGroup = res.body.find((g: any) => g.name === "Test Private");
-      const personalGroup = res.body.find((g: any) => g.groupType === "PERSONAL");
+      const personalGroup = res.body.find((g: any) => g.name === "Test Personal");
 
       expect(publicGroup.displayLabel).toBe("Test Public public assembly room");
       expect(privateGroup.displayLabel).toBe("Test Private private assembly room");
@@ -626,7 +595,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Hidden Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true,
           adminId: admin.userId,
         },
@@ -647,7 +616,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Personal Group",
-          groupType: "PERSONAL",
+          groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
           adminId: user.userId,
         },
       });
@@ -668,7 +637,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Someone's Personal Group",
-          groupType: "PERSONAL",
+          groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
           adminId: admin.userId,
         },
       });
@@ -689,7 +658,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           adminId: admin.userId,
         },
       });
@@ -718,7 +687,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           adminId: admin.userId,
         },
       });
@@ -748,7 +717,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           adminId: admin.userId,
         },
       });
@@ -778,7 +747,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Public Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
         },
       });
@@ -815,7 +784,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Private Test Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           adminId: admin.userId,
         },
       });
@@ -862,7 +831,7 @@ describe("groups endpoints", () => {
       expect(res.text).toBe("Group not found");
     });
 
-    it("returns 403 when trying to access someone else's PERSONAL group", async () => {
+    it("returns 403 when non-acquaintance tries to access someone else's PERSONAL group", async () => {
       const admin = await createUserAndGetToken(false);
       const user = await createUserAndGetToken(false);
 
@@ -870,7 +839,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Personal Group",
-          groupType: "PERSONAL",
+          groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
           adminId: admin.userId,
         },
       });
@@ -882,8 +851,8 @@ describe("groups endpoints", () => {
       expect(res.status).toBe(403);
       expect(res.body).toEqual({
         error: "FORBIDDEN",
-        code: "PERSONAL_OWNER_ONLY",
-        message: "Unauthorized users may not access other users personal groups."
+        code: "PERSONAL_OWNER_OR_MEMBER_ONLY",
+        message: "Only the owner, members, or acquaintances can access this personal group."
       });
     });
 
@@ -895,7 +864,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Personal Group",
-          groupType: "PERSONAL",
+          groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
           adminId: admin.userId,
         },
       });
@@ -939,7 +908,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
         },
       });
@@ -972,7 +941,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Hidden Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true,
           adminId: admin.userId,
         },
@@ -996,7 +965,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
           membershipHidden: true, // This makes the membership roster hidden
         },
@@ -1040,7 +1009,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
         },
       });
@@ -1107,7 +1076,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
         },
       });
@@ -1150,7 +1119,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Empty Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
         },
       });
@@ -1175,7 +1144,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           adminId: admin.userId,
         },
       });
@@ -1214,7 +1183,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId,
         },
       });
@@ -1285,7 +1254,7 @@ describe("groups endpoints", () => {
       await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1316,7 +1285,7 @@ describe("groups endpoints", () => {
       const hiddenGroup = await prisma.groups.create({
         data: {
           name: "Hidden Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true,
           adminId: admin.userId
         }
@@ -1356,7 +1325,7 @@ describe("groups endpoints", () => {
       const membershipHiddenGroup = await prisma.groups.create({
         data: {
           name: "Membership Hidden Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           membershipHidden: true,
           adminId: admin.userId
         }
@@ -1396,7 +1365,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1450,7 +1419,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1495,7 +1464,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1534,7 +1503,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1582,7 +1551,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1618,7 +1587,7 @@ describe("groups endpoints", () => {
         data: {
           name: "Test Group",
           description: "A test group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1649,7 +1618,7 @@ describe("groups endpoints", () => {
       expect(returnedGroup).toHaveProperty("id", group.id);
       expect(returnedGroup).toHaveProperty("name", "Test Group");
       expect(returnedGroup).toHaveProperty("description", "A test group");
-      expect(returnedGroup).toHaveProperty("groupType", "PUBLIC");
+      expect(returnedGroup).toHaveProperty("groupPrivacy", "PUBLIC");
       expect(returnedGroup).toHaveProperty("adminId", admin.userId);
       expect(returnedGroup).toHaveProperty("memberCount", 2);
       expect(returnedGroup).toHaveProperty("mutualConnections");
@@ -1691,7 +1660,7 @@ describe("groups endpoints", () => {
       const largerGroup = await prisma.groups.create({
         data: {
           name: "Larger Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin1.userId
         }
       });
@@ -1700,7 +1669,7 @@ describe("groups endpoints", () => {
       const smallerGroup = await prisma.groups.create({
         data: {
           name: "Smaller Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin2.userId
         }
       });
@@ -1761,7 +1730,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1800,7 +1769,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Multi Connection Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: admin.userId
         }
       });
@@ -1861,7 +1830,7 @@ describe("groups endpoints", () => {
       const hiddenGroup = await prisma.groups.create({
         data: {
           name: "Hidden Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           isHidden: true,
           adminId: admin.userId
         }
@@ -1871,7 +1840,7 @@ describe("groups endpoints", () => {
       const membershipHiddenGroup = await prisma.groups.create({
         data: {
           name: "Membership Hidden Group",
-          groupType: "PRIVATE",
+          groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
           membershipHidden: true,
           adminId: admin.userId
         }
@@ -1927,7 +1896,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -1948,7 +1917,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -1978,7 +1947,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -2025,7 +1994,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -2064,7 +2033,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -2133,7 +2102,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -2183,7 +2152,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -2259,7 +2228,7 @@ describe("groups endpoints", () => {
       const group = await prisma.groups.create({
         data: {
           name: "Test Group",
-          groupType: "PUBLIC",
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
           adminId: adminId
         }
       });
@@ -2335,7 +2304,7 @@ describe("groups endpoints", () => {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
           adminId: adminId,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         }
       });
 
@@ -2388,7 +2357,7 @@ describe("groups endpoints", () => {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
           adminId: adminId,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         }
       });
 
@@ -2472,7 +2441,7 @@ describe("groups endpoints", () => {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
           adminId: adminId,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         }
       });
 
@@ -2512,7 +2481,7 @@ describe("groups endpoints", () => {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
           adminId: adminId,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         }
       });
 
@@ -2558,7 +2527,7 @@ describe("groups endpoints", () => {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
           adminId: adminId,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         }
       });
 
@@ -2621,7 +2590,7 @@ describe("groups endpoints", () => {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
           adminId: adminId,
-          groupType: "PUBLIC"
+          groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC"
         }
       });
 

@@ -32,16 +32,35 @@ router.get("/groups", auth, async (req, res) => {
       } 
     });
 
+    // Get user's acquaintance connections for PERSONAL group visibility
+    const acquaintanceConnections = await prisma.userConnection.findMany({
+      where: {
+        userId: userId,
+        type: "ACQUAINTANCE"
+      },
+      select: {
+        otherUserId: true
+      }
+    });
+    
+    const acquaintanceIds = new Set(acquaintanceConnections.map(c => c.otherUserId));
+
     // Filter groups based on visibility rules
     const filteredGroups = groups.filter(g => {
       // Safety checks
-      if (!g || !g.adminId || !g.groupType) {
+      if (!g || !g.adminId || !g.groupPrivacy) {
         return false;
       }
 
-      // Filter out PERSONAL groups where the requester is not the admin
-      if (g.groupType === "PERSONAL" && g.adminId !== userId) {
-        return false;
+      // Filter out PERSONAL groups where the requester is not the admin, a member, or an acquaintance
+      if (g.groupPrivacy === "PERSONAL") {
+        const isAdmin = g.adminId === userId;
+        const isMember = (g.members && g.members.length > 0) || false;
+        const isAcquaintance = acquaintanceIds.has(g.adminId);
+        
+        if (!isAdmin && !isMember && !isAcquaintance) {
+          return false;
+        }
       }
 
       // Filter out hidden groups unless the requester is admin or member
@@ -65,9 +84,9 @@ router.get("/groups", auth, async (req, res) => {
         // Safety check for group name
         const groupName = g?.name || "Unknown Group";
         
-        if (g?.groupType === "PUBLIC")
+        if (g?.groupPrivacy === "PUBLIC")
           return { ...groupWithoutMembers, displayLabel: `${groupName} public assembly room` };
-        if (g?.groupType === "PRIVATE")
+        if (g?.groupPrivacy === "PRIVATE")
           return { ...groupWithoutMembers, displayLabel: `${groupName} private assembly room` };
         return { ...groupWithoutMembers, displayLabel: "Social Circle" };
       })
@@ -161,7 +180,7 @@ router.get("/groups/mutuals", auth, async (req, res) => {
         AND: [
           { isHidden: false },
           { membershipHidden: false },
-          { groupType: { notIn: ["PERSONAL"] } }, // Exclude personal groups
+          { groupPrivacy: { notIn: ["PERSONAL"] } }, // Exclude personal groups
           { 
             NOT: {
               id: { in: Array.from(bannedGroupIds) }
@@ -212,6 +231,7 @@ router.get("/groups/mutuals", auth, async (req, res) => {
       name: group.name,
       description: group.description,
       groupType: group.groupType,
+      groupPrivacy: group.groupPrivacy,
       createdAt: group.createdAt,
       adminId: group.adminId,
       memberCount: group._count.members,
@@ -247,14 +267,13 @@ router.get("/groups/:groupId", auth, async (req, res) => {
   }
 
   try {
-    // Get group information with admin details
+    // Fetch group with admin and member details
     const group = await prisma.groups.findUnique({
       where: { id: groupId },
       include: {
         admin: {
           select: {
             id: true,
-            username: true,
             firstName: true,
             lastName: true
           }
@@ -275,15 +294,6 @@ router.get("/groups/:groupId", auth, async (req, res) => {
       return res.status(404).send("Group not found");
     }
 
-    // Check if group is PERSONAL and requester is not the admin
-    if (group.groupType === "PERSONAL" && group.adminId !== userId) {
-      return res.status(403).json({
-        error: "FORBIDDEN",
-        code: "PERSONAL_OWNER_ONLY",
-        message: "Unauthorized users may not access other users personal groups."
-      });
-    }
-
     // Check requester's membership status
     const requesterMembership = await prisma.groupMember.findUnique({
       where: {
@@ -293,6 +303,26 @@ router.get("/groups/:groupId", auth, async (req, res) => {
         }
       }
     });
+
+    // Check if group is PERSONAL and requester is not the admin, a member, or an acquaintance
+    if (group.groupPrivacy === "PERSONAL" && group.adminId !== userId && !requesterMembership) {
+      // Check if user is an acquaintance of the group admin
+      const isAcquaintance = await prisma.userConnection.findFirst({
+        where: {
+          userId: userId,
+          otherUserId: group.adminId,
+          type: "ACQUAINTANCE"
+        }
+      });
+      
+      if (!isAcquaintance) {
+        return res.status(403).json({
+          error: "FORBIDDEN",
+          code: "PERSONAL_OWNER_OR_MEMBER_ONLY",
+          message: "Only the owner, members, or acquaintances can access this personal group."
+        });
+      }
+    }
 
     // If requester is banned
     if (requesterMembership && requesterMembership.isBanned) {
@@ -311,7 +341,36 @@ router.get("/groups/:groupId", auth, async (req, res) => {
     let members = [];
     let memberVisibility = "VISIBLE";
 
-    if (requesterMembership || !group.membershipHidden) {
+    // For PERSONAL groups, check membershipHidden and acquaintance status
+    if (group.groupPrivacy === "PERSONAL") {
+      if (requesterMembership || !group.membershipHidden) {
+        // Member OR (acquaintance AND membershipHidden=false) can see all non-banned members
+        const membersList = await prisma.groupMember.findMany({
+          where: {
+            groupId: groupId,
+            isBanned: false
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                profilePhoto: true
+              }
+            }
+          },
+          orderBy: {
+            joinedAt: 'asc'
+          }
+        });
+        members = membersList;
+      } else {
+        // Acquaintances when membershipHidden=true cannot see member list
+        memberVisibility = "HIDDEN";
+      }
+    } else if (requesterMembership || !group.membershipHidden) {
       // Get all non-banned members
       const membersList = await prisma.groupMember.findMany({
         where: {
@@ -322,57 +381,41 @@ router.get("/groups/:groupId", auth, async (req, res) => {
           user: {
             select: {
               id: true,
-              username: true,
               firstName: true,
-              lastName: true
+              lastName: true,
+              profilePhoto: true
             }
           }
         },
         orderBy: {
-          joinedAt: 'asc'
+          joinedAt: "asc"
         }
       });
 
-      members = membersList.map(member => ({
-        membershipId: member.membershipId,
-        userId: member.userId,
-        joinedAt: member.joinedAt,
-        user: member.user
-      }));
+      members = membersList;
     } else {
       memberVisibility = "HIDDEN";
     }
 
-    // Apply display label logic
-    let displayLabel = "Social Circle";
-    if (group.groupType === "PUBLIC") {
-      displayLabel = `${group.name} public assembly room`;
-    } else if (group.groupType === "PRIVATE") {
-      displayLabel = `${group.name} private assembly room`;
-    }
-
-    // Return group details with members
-    return res.status(200).json({
+    const response = {
       id: group.id,
       name: group.name,
       description: group.description,
       groupType: group.groupType,
+      groupPrivacy: group.groupPrivacy,
       isHidden: group.isHidden,
-      membershipHidden: group.membershipHidden,
-      adminId: group.adminId,
       admin: group.admin,
-      createdAt: group.createdAt,
-      displayLabel: displayLabel,
       memberCount: group._count.members,
       members: members,
       memberVisibility: memberVisibility,
-      isMember: !!requesterMembership,
-      isAdmin: group.adminId === userId
-    });
+      isAdmin: group.adminId === userId,
+      isMember: !!requesterMembership
+    };
 
+    res.json(response);
   } catch (error) {
     console.error("Error fetching group details:", error);
-    res.status(500).send("Internal server error");
+    return res.status(500).send("Internal server error");
   }
 });
 
@@ -390,29 +433,20 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
   }
 
   try {
-    // Get group information
+    // Fetch group
     const group = await prisma.groups.findUnique({
       where: { id: groupId },
       select: {
         id: true,
-        groupType: true,
+        groupPrivacy: true,
+        adminId: true,
         isHidden: true,
-        membershipHidden: true,
-        adminId: true
+        membershipHidden: true
       }
     });
 
     if (!group) {
       return res.status(404).send("Group not found");
-    }
-
-    // Check if group is PERSONAL and requester is not the admin
-    if (group.groupType === "PERSONAL" && group.adminId !== userId) {
-      return res.status(403).json({
-        error: "FORBIDDEN",
-        code: "PERSONAL_OWNER_ONLY",
-        message: "Unauthorized users may not access other users personal groups."
-      });
     }
 
     // Check requester's membership status
@@ -424,6 +458,26 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
         }
       }
     });
+
+    // Check if group is PERSONAL and requester is not the admin, a member, or an acquaintance
+    if (group.groupPrivacy === "PERSONAL" && group.adminId !== userId && !requesterMembership) {
+      // Check if user is an acquaintance of the group admin
+      const isAcquaintance = await prisma.userConnection.findFirst({
+        where: {
+          userId: userId,
+          otherUserId: group.adminId,
+          type: "ACQUAINTANCE"
+        }
+      });
+      
+      if (!isAcquaintance) {
+        return res.status(403).json({
+          error: "FORBIDDEN",
+          code: "PERSONAL_OWNER_OR_MEMBER_ONLY",
+          message: "Only the owner, members, or acquaintances can access this personal group."
+        });
+      }
+    }
 
     // If requester is banned
     if (requesterMembership && requesterMembership.isBanned) {
@@ -438,8 +492,24 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
       return res.status(404).send("Group not found");
     }
 
-    // Check if membership is hidden for non-members
-    if (!requesterMembership && group.membershipHidden) {
+    // For PERSONAL groups, check membershipHidden
+    if (group.groupPrivacy === "PERSONAL" && !requesterMembership && group.membershipHidden) {
+      const totalCount = await prisma.groupMember.count({
+        where: {
+          groupId: groupId,
+          isBanned: false
+        }
+      });
+
+      return res.status(200).json({
+        members: [],
+        totalCount: totalCount,
+        visibility: "HIDDEN"
+      });
+    }
+
+    // Check if membership is hidden for non-members (non-PERSONAL groups)
+    if (!requesterMembership && group.membershipHidden && group.groupPrivacy !== "PERSONAL") {
       const totalCount = await prisma.groupMember.count({
         where: {
           groupId: groupId,
@@ -513,6 +583,7 @@ router.post("/groups/:id/join", auth, async (req, res) => {
       select: {
         id: true,
         groupType: true,
+        groupPrivacy: true,
         isHidden: true,
         adminId: true
       }
@@ -528,13 +599,25 @@ router.post("/groups/:id/join", auth, async (req, res) => {
     }
 
     // Check if group is PERSONAL
-    if (group.groupType === "PERSONAL") {
-      // If it's the user's own PERSONAL group, return bad request
+    if (group.groupPrivacy === "PERSONAL") {
+      // Cannot join your own PERSONAL group
       if (group.adminId === userId) {
         return res.status(400).send("Cannot request to join your own personal group");
       }
-      // If it's someone else's PERSONAL group, return not found
-      return res.status(404).send("Group not found");
+      
+      // Can only join if you are an ACQUAINTANCE of the owner
+      const acquaintanceConnection = await prisma.userConnection.findFirst({
+        where: {
+          userId: userId,
+          otherUserId: group.adminId,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      if (!acquaintanceConnection) {
+        // Return 404 to not reveal the group exists
+        return res.status(404).send("Group not found");
+      }
     }
 
     // Check if user is already a member
@@ -595,7 +678,7 @@ router.post("/groups/:id/join", auth, async (req, res) => {
 
 // --- Create Group ---
 router.post("/groups", auth, async (req, res) => {
-  const { name, description, groupType, isHidden } = req.body ?? {};
+  const { name, description, groupType, groupPrivacy, isHidden, viceChairId, admins, electionCycle } = req.body ?? {};
   if (!name) return res.status(400).send("Missing name");
 
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
@@ -603,10 +686,31 @@ router.post("/groups", auth, async (req, res) => {
   }
   const me = req.user as any;
 
-  // Only allow PUBLIC or PRIVATE for assembly rooms
-  const allowed = ["PUBLIC", "PRIVATE"];
-  if (!allowed.includes(String(groupType)?.toUpperCase()))
-    return res.status(400).send("groupType must be PUBLIC or PRIVATE");
+  // Validate groupType (AUTOCRATIC or ROUND_TABLE)
+  const allowedGroupTypes = ["AUTOCRATIC", "ROUND_TABLE"];
+  if (!allowedGroupTypes.includes(String(groupType)?.toUpperCase()))
+    return res.status(400).send("groupType must be AUTOCRATIC or ROUND_TABLE");
+
+  // Validate groupPrivacy (PUBLIC, PRIVATE, or PERSONAL)
+  const allowedGroupPrivacy = ["PUBLIC", "PRIVATE", "PERSONAL"];
+  if (!allowedGroupPrivacy.includes(String(groupPrivacy)?.toUpperCase()))
+    return res.status(400).send("groupPrivacy must be PUBLIC, PRIVATE, or PERSONAL");
+
+  // For Round Table groups, validate required fields
+  if (String(groupType).toUpperCase() === "ROUND_TABLE") {
+    if (!viceChairId) return res.status(400).send("viceChairId is required for Round Table groups");
+    if (!admins || !Array.isArray(admins) || admins.length < 1 || admins.length > 4) {
+      return res.status(400).send("Round Table groups must have 1-4 admins");
+    }
+    
+    // Validate electionCycle if provided
+    if (electionCycle) {
+      const allowedCycles = ["THREE_MONTHS", "SIX_MONTHS", "ONE_YEAR", "TWO_YEARS", "FOUR_YEARS"];
+      if (!allowedCycles.includes(String(electionCycle).toUpperCase())) {
+        return res.status(400).send("Invalid electionCycle");
+      }
+    }
+  }
 
   try {
     // Get user's payment status to check if they can set isHidden
@@ -631,21 +735,48 @@ router.post("/groups", auth, async (req, res) => {
     }
     // For unpaid users or when isHidden is not true, always use false
 
+    const groupData: any = {
+      name: String(name),
+      description: description ?? null,
+      groupType: String(groupType).toUpperCase() as "AUTOCRATIC" | "ROUND_TABLE",
+      groupPrivacy: String(groupPrivacy).toUpperCase() as GroupPrivacy,
+      isHidden: finalIsHidden,
+      adminId: me.id,
+    };
+
+    // Add Round Table specific fields
+    if (String(groupType).toUpperCase() === "ROUND_TABLE") {
+      groupData.viceChairId = viceChairId;
+      if (electionCycle) {
+        groupData.electionCycle = String(electionCycle).toUpperCase();
+      }
+    }
+
     const group = await prisma.groups.create({
-      data: {
-        name: String(name),
-        description: description ?? null,
-        groupType: String(groupType).toUpperCase() as GroupPrivacy,
-        isHidden: finalIsHidden,
-        adminId: me.id,
-      },
+      data: groupData,
       select: {
         id: true,
         name: true,
         groupType: true,
+        groupPrivacy: true,
         isHidden: true,
+        viceChairId: true,
+        electionCycle: true,
       },
     });
+
+    // For Round Table groups, create GroupAdmin entries for the selected admins
+    if (String(groupType).toUpperCase() === "ROUND_TABLE" && admins && Array.isArray(admins)) {
+      const adminEntries = admins.map((admin: any) => ({
+        groupId: group.id,
+        userId: admin.userId,
+        isModerator: admin.isModerator ?? false,
+      }));
+
+      await prisma.groupAdmin.createMany({
+        data: adminEntries,
+      });
+    }
     
     res.status(201).json(group);
   } catch (e) {
@@ -667,8 +798,8 @@ router.get("/groups/:id/room", auth, async (req, res) => {
   const g = await prisma.groups.findUnique({ where: { id: req.params.id as string } });
   if (!g) return res.sendStatus(404);
 
-  if (g.groupType === "PERSONAL") return res.status(404).send("no room for social circle");
-  if (g.groupType === "PRIVATE") {
+  if (g.groupPrivacy === "PERSONAL") return res.status(404).send("no room for social circle");
+  if (g.groupPrivacy === "PRIVATE") {
     const member = await prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: me, groupId: g.id } },
     });
@@ -677,7 +808,7 @@ router.get("/groups/:id/room", auth, async (req, res) => {
   res.json({
     id: g.id,
     forumName:
-      g.groupType === "PUBLIC"
+      g.groupPrivacy === "PUBLIC"
         ? `${g.name} public assembly room`
         : `${g.name} private assembly room`,
   });
@@ -1005,7 +1136,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
           where: {
             adminId: { in: validConnectionUserIds },
             isHidden: false,
-            groupType: { notIn: ["PERSONAL"] }
+            groupPrivacy: { notIn: ["PERSONAL"] }
           },
           include: {
             admin: {
@@ -1028,7 +1159,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
       const group = membership.group;
 
       // Filter out PERSONAL groups if requester is not the owner
-      if (group.groupType === "PERSONAL" && group.adminId !== requesterId) {
+      if (group.groupPrivacy === "PERSONAL" && group.adminId !== requesterId) {
         return false;
       }
 
@@ -1049,7 +1180,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     // Filter admin groups based on visibility rules
     const visibleAdminGroups = adminGroups.filter((group: any) => {
       // Filter out PERSONAL groups if requester is not the owner
-      if (group.groupType === "PERSONAL" && group.adminId !== requesterId) {
+      if (group.groupPrivacy === "PERSONAL" && group.adminId !== requesterId) {
         return false;
       }
 
@@ -1072,9 +1203,9 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
       const group = membership.group;
       
       let displayLabel = "Social Circle";
-      if (group.groupType === "PUBLIC") {
+      if (group.groupPrivacy === "PUBLIC") {
         displayLabel = `${group.name} public assembly room`;
-      } else if (group.groupType === "PRIVATE") {
+      } else if (group.groupPrivacy === "PRIVATE") {
         displayLabel = `${group.name} private assembly room`;
       }
 
@@ -1094,9 +1225,9 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     // Format the response for admin groups
     const formattedAdminGroups = visibleAdminGroups.map((group: any) => {
       let displayLabel = "Social Circle";
-      if (group.groupType === "PUBLIC") {
+      if (group.groupPrivacy === "PUBLIC") {
         displayLabel = `${group.name} public assembly room`;
-      } else if (group.groupType === "PRIVATE") {
+      } else if (group.groupPrivacy === "PRIVATE") {
         displayLabel = `${group.name} private assembly room`;
       }
 
@@ -1116,9 +1247,9 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     // Format the response for mutual admin groups
     const formattedMutualAdminGroups = mutualAdminGroups.map((group: any) => {
       let displayLabel = "Social Circle";
-      if (group.groupType === "PUBLIC") {
+      if (group.groupPrivacy === "PUBLIC") {
         displayLabel = `${group.name} public assembly room`;
-      } else if (group.groupType === "PRIVATE") {
+      } else if (group.groupPrivacy === "PRIVATE") {
         displayLabel = `${group.name} private assembly room`;
       }
 

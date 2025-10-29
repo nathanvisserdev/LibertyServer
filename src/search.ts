@@ -86,21 +86,31 @@ router.get("/search/users", auth, async (req, res) => {
       }
     });
 
+    // Get all user's acquaintance connections for PERSONAL group filtering
+    const acquaintanceIds = await prisma.userConnection.findMany({
+      where: {
+        userId: userId,
+        type: "ACQUAINTANCE"
+      },
+      select: {
+        otherUserId: true
+      }
+    });
+    const acquaintanceUserIds = new Set(acquaintanceIds.map(a => a.otherUserId));
+
     // Filter groups based on visibility rules
     const filteredGroups = allGroups.filter(g => {
-      // Exclude PERSONAL groups unless the requester is the admin
-      if (g.groupType === "PERSONAL" && g.adminId !== userId) {
+      const isAdmin = g.adminId === userId;
+      const isMember = g.members.length > 0;
+      
+      // For PERSONAL groups: only admin and acquaintances can see them (unless hidden)
+      if (g.groupPrivacy === "PERSONAL" && !isAdmin && !acquaintanceUserIds.has(g.adminId)) {
         return false;
       }
 
-      // Exclude hidden groups unless requester is admin or member
-      if (g.isHidden) {
-        const isAdmin = g.adminId === userId;
-        const isMember = g.members.length > 0;
-        
-        if (!isAdmin && !isMember) {
-          return false;
-        }
+      // For all groups: if hidden, only admin or members can see them
+      if (g.isHidden && !isAdmin && !isMember) {
+        return false;
       }
 
       return true;
@@ -111,6 +121,7 @@ router.get("/search/users", auth, async (req, res) => {
       id: g.id,
       name: g.name,
       groupType: g.groupType,
+      groupPrivacy: g.groupPrivacy,
       isHidden: g.isHidden,
     }));
 
