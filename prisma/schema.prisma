@@ -109,14 +109,14 @@ enum VoteChoice {
   ABSTAIN
 }
 
-enum SubNetworkRole {
+enum SubNetRole {
   OWNER
   MANAGER
   CONTRIBUTOR
   VIEWER
 }
 
-enum SubNetworkVisibility {
+enum SubNetVisibility {
   PRIVATE
   ACQUAINTANCES
   CONNECTIONS
@@ -178,14 +178,14 @@ model User {
   pendingRequestCount Int @default(0)
 
   // Sub-Networks
-  subnetworks            SubNetwork[] @relation("OwnedSubNetworks")
-  subNetworkMemberships  SubNetworkMember[]
+  subnets               SubNet[] @relation("OwnedSubNets")
+  subNetMemberships     SubNetMember[]
 
-  defaultSubNetworkId    String?
-  defaultSubNetwork      SubNetwork? @relation("DefaultSubNetwork", fields: [defaultSubNetworkId], references: [id], onDelete: SetNull)
+  defaultSubNetId       String?
+  defaultSubNet         SubNet? @relation("DefaultSubNet", fields: [defaultSubNetId], references: [id], onDelete: SetNull)
 
   @@index([isPaid])
-  @@index([defaultSubNetworkId])
+  @@index([defaultSubNetId])
 }
 
 model DeviceToken {
@@ -443,15 +443,15 @@ model Post {
 
   userId        String
   groupId       String?
-  subNetworkId  String?     // target audience within user's network
+  subNetId      String?     // target audience within user's network
 
   user          User       @relation(fields: [userId], references: [id])
   group         Group?     @relation(fields: [groupId], references: [id])
-  subNetwork    SubNetwork? @relation(fields: [subNetworkId], references: [id], onDelete: SetNull)
+  subNet        SubNet?    @relation(fields: [subNetId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt, id])         // profile feed keyset
   @@index([groupId, createdAt, id])        // group feed
-  @@index([subNetworkId, createdAt, id])   // subnetwork feed
+  @@index([subNetId, createdAt, id])       // subnet feed
   @@index([visibility])
 }
 
@@ -486,7 +486,7 @@ model Connection {
   requested   User @relation("conn_incoming", fields: [requestedId], references: [id])
 
   adjacencies UserConnection[] @relation("UserConnection_connection")
-  subNetworkMembers SubNetworkMember[]
+  subNetMembers SubNetMember[]
 
   @@unique([requesterId, requestedId, type])
   @@index([requesterId, requestedId, type])
@@ -508,23 +508,23 @@ model UserConnection {
   @@index([otherUserId, type])  // For fast follower lookups
 }
 
-model SubNetwork {
+model SubNet {
   id          String   @id @default(cuid())
   ownerId     String
-  owner       User    @relation("OwnedSubNetworks", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User    @relation("OwnedSubNets", fields: [ownerId], references: [id], onDelete: Cascade)
 
   name        String
   slug        String
   description String?
 
-  visibility  SubNetworkVisibility @default(PRIVATE)
+  visibility  SubNetVisibility @default(PRIVATE)
   isDefault   Boolean  @default(false)
   ordering    Int      @default(0)
 
   // hierarchy (optional layering)
   parentId    String?
-  parent      SubNetwork?  @relation("SubNetworkHierarchy", fields: [parentId], references: [id])
-  children    SubNetwork[] @relation("SubNetworkHierarchy")
+  parent      SubNet?  @relation("SubNetHierarchy", fields: [parentId], references: [id])
+  children    SubNet[] @relation("SubNetHierarchy")
 
   // denormalized counters
   memberCount Int      @default(0)
@@ -533,33 +533,33 @@ model SubNetwork {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  members     SubNetworkMember[]
+  members     SubNetMember[]
   posts       Post[]
-  defaultFor  User[]  @relation("DefaultSubNetwork")
+  defaultFor  User[]  @relation("DefaultSubNet")
 
   @@unique([ownerId, slug])                // global-per-owner slug uniqueness
   @@index([ownerId])
-  @@index([ownerId, createdAt, id])        // keyset pagination for owner's subnetworks
+  @@index([ownerId, createdAt, id])        // keyset pagination for owner's subnets
   @@index([ownerId, parentId, ordering])
   @@index([parentId])
 }
 
-model SubNetworkMember {
+model SubNetMember {
   id            String         @id @default(cuid())
-  subNetworkId  String
+  subNetId      String
   userId        String          // fast read key; must be a valid connection to ownerId (enforce in service)
   connectionId  String          // integrity FK to Connection.id
 
-  role          SubNetworkRole  @default(VIEWER) // OWNER implicit via SubNetwork.ownerId
+  role          SubNetRole  @default(VIEWER) // OWNER implicit via SubNet.ownerId
   createdAt     DateTime        @default(now())
 
-  subNetwork    SubNetwork      @relation(fields: [subNetworkId], references: [id], onDelete: Cascade)
+  subNet        SubNet         @relation(fields: [subNetId], references: [id], onDelete: Cascade)
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  connection    Connection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connection    Connection     @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
-  @@unique([subNetworkId, userId])
-  @@index([userId, subNetworkId])
-  @@index([subNetworkId, role])
+  @@unique([subNetId, userId])
+  @@index([userId, subNetId])
+  @@index([subNetId, role])
   @@index([connectionId])
 }
 

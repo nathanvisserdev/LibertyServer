@@ -21,6 +21,8 @@ import devicesRouter from "./devices.js";
 import mediaRouter from "./media.js";
 import mediaReadRouter from "./mediaRead.js";
 import { signupRouter } from "./signup.js";
+import subnetsRouter from "./subnets.js";
+import subnetMembersRouter from "./subnetMembers.js";
 
 const app = express();
 app.use(express.json());
@@ -42,6 +44,8 @@ app.use(connectionsRouter);
 app.use(devicesRouter);
 app.use(mediaRouter);
 app.use(mediaReadRouter);
+app.use(subnetsRouter);
+app.use(subnetMembersRouter);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(process.env.PORT || 3000, () =>
