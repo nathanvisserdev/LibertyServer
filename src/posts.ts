@@ -104,27 +104,28 @@ router.post("/posts", auth, async (req, res) => {
 router.get("/feed", auth, async (req, res) => {
   const me = (req as any).user.id as string;
 
-  const [undirected, following] = await Promise.all([
-    prisma.connections.findMany({
-      where: {
-        type: { in: ["ACQUAINTANCE", "STRANGER"] },
-        OR: [{ requesterId: me }, { requestedId: me }],
-      },
-      select: { requesterId: true, requestedId: true, type: true },
-    }),
-    prisma.connections.findMany({
-      where: { type: "IS_FOLLOWING", requesterId: me },
-      select: { requestedId: true },
-    }),
-  ]);
+  // Use adjacency table for fast fan-out
+  const userConnections = await prisma.userConnection.findMany({
+    where: {
+      userId: me,
+      type: { in: ["ACQUAINTANCE", "STRANGER", "IS_FOLLOWING"] }
+    },
+    select: { otherUserId: true, type: true }
+  });
 
   const acquaintances = new Set<string>();
-  const strangers     = new Set<string>();
-  for (const r of undirected) {
-    const other = r.requesterId === me ? r.requestedId : r.requesterId;
-    (r.type === "ACQUAINTANCE" ? acquaintances : strangers).add(other);
+  const strangers = new Set<string>();
+  const followingIds = new Set<string>();
+  
+  for (const conn of userConnections) {
+    if (conn.type === "ACQUAINTANCE") {
+      acquaintances.add(conn.otherUserId);
+    } else if (conn.type === "STRANGER") {
+      strangers.add(conn.otherUserId);
+    } else if (conn.type === "IS_FOLLOWING") {
+      followingIds.add(conn.otherUserId);
+    }
   }
-  const followingIds = new Set(following.map(r => r.requestedId));
 
   const authorIds = Array.from(new Set([me, ...acquaintances, ...strangers, ...followingIds]));
 

@@ -59,6 +59,52 @@ async function createUserAndGetToken(isPaid?: boolean, email?: string, password?
   };
 }
 
+// Helper function to create a connection with adjacency table entries
+async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING") {
+  const connection = await prisma.connections.create({
+    data: {
+      requesterId,
+      requestedId,
+      type,
+    },
+  });
+
+  // Create adjacency table entries for fast lookups
+  // IS_FOLLOWING is one-directional (requester follows requested)
+  // ACQUAINTANCE and STRANGER are bidirectional
+  if (type === "IS_FOLLOWING") {
+    // Only create one entry: follower -> followed
+    await prisma.userConnection.create({
+      data: {
+        userId: requesterId,
+        otherUserId: requestedId,
+        connectionId: connection.id,
+        type,
+      }
+    });
+  } else {
+    // Create both directions for bidirectional connections
+    await prisma.userConnection.createMany({
+      data: [
+        {
+          userId: requesterId,
+          otherUserId: requestedId,
+          connectionId: connection.id,
+          type,
+        },
+        {
+          userId: requestedId,
+          otherUserId: requesterId,
+          connectionId: connection.id,
+          type,
+        }
+      ]
+    });
+  }
+
+  return connection;
+}
+
 describe("groups endpoints", () => {
   // Clean up test data after all tests complete
   afterAll(async () => {
@@ -1564,21 +1610,8 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connections
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user2.userId,
-          type: "ACQUAINTANCE"
-        }
-      });
-
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user3.userId,
-          type: "IS_FOLLOWING"
-        }
-      });
+      await createConnection(user1.userId, user2.userId, "ACQUAINTANCE");
+      await createConnection(user1.userId, user3.userId, "IS_FOLLOWING");
 
       // Create group
       const group = await prisma.groups.create({
@@ -1650,29 +1683,9 @@ describe("groups endpoints", () => {
       const admin2 = await createUserAndGetToken(false);
 
       // Create connections
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user2.userId,
-          type: "ACQUAINTANCE"
-        }
-      });
-
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user3.userId,
-          type: "STRANGER"
-        }
-      });
-
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user4.userId,
-          type: "IS_FOLLOWING"
-        }
-      });
+      await createConnection(user1.userId, user2.userId, "ACQUAINTANCE");
+      await createConnection(user1.userId, user3.userId, "STRANGER");
+      await createConnection(user1.userId, user4.userId, "IS_FOLLOWING");
 
       // Create group with 3 total members (2 connections + 1 other)
       const largerGroup = await prisma.groups.create({
@@ -1742,13 +1755,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connection where user2 is requester and user1 is requested
-      await prisma.connections.create({
-        data: {
-          requesterId: user2.userId,
-          requestedId: user1.userId,
-          type: "ACQUAINTANCE"
-        }
-      });
+      await createConnection(user2.userId, user1.userId, "ACQUAINTANCE");
 
       // Create group
       const group = await prisma.groups.create({
@@ -1785,29 +1792,9 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create different types of connections
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user2.userId,
-          type: "ACQUAINTANCE"
-        }
-      });
-
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user3.userId,
-          type: "STRANGER"
-        }
-      });
-
-      await prisma.connections.create({
-        data: {
-          requesterId: user1.userId,
-          requestedId: user4.userId,
-          type: "IS_FOLLOWING"
-        }
-      });
+      await createConnection(user1.userId, user2.userId, "ACQUAINTANCE");
+      await createConnection(user1.userId, user3.userId, "STRANGER");
+      await createConnection(user1.userId, user4.userId, "IS_FOLLOWING");
 
       // Create group
       const group = await prisma.groups.create({

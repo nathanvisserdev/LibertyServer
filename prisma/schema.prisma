@@ -132,6 +132,7 @@ model Users {
   posts         Posts[]
   groups        GroupMember[]
 
+  userConnections UserConnection[] @relation("UserConnection_user")
   outgoingRequests ConnectionRequest[] @relation("req_outgoing")
   incomingRequests ConnectionRequest[] @relation("req_incoming")
   following Connections[] @relation("conn_outgoing")
@@ -377,7 +378,6 @@ model RoundTableLog {
   @@index([groupId, consensus])
 }
 
-// ===== Round table continuity plan =====
 model RoundTableContinuity {
   id        String   @id @default(cuid())
   groupId   String
@@ -448,11 +448,28 @@ model Connections {
   type        ConnectionType
   since       DateTime       @default(now())
 
+  adjacencies UserConnection[] @relation("UserConnection_connection")
   requester Users @relation("conn_outgoing", fields: [requesterId], references: [id])
   requested Users @relation("conn_incoming", fields: [requestedId], references: [id])
 
   @@unique([requesterId, requestedId, type])
 }
+
+model UserConnection {
+  userId        String
+  otherUserId   String
+  connectionId  String
+  type          ConnectionType
+  createdAt     DateTime       @default(now())
+
+  user          Users       @relation("UserConnection_user", fields: [userId], references: [id], onDelete: Cascade)
+  connection    Connections @relation("UserConnection_connection", fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, otherUserId, type])
+  @@index([userId, type, createdAt])
+  @@index([otherUserId, type])  // For fast follower lookups
+}
+
 
 // Directed block: (blockerId -> blockedId)
 model Blocks {

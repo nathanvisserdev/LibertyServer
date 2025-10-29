@@ -78,6 +78,11 @@ describe("connections endpoints", () => {
         ]
       }
     });
+    await prisma.userConnection.deleteMany({
+      where: {
+        user: { email: { contains: testNamespace } }
+      }
+    });
     await prisma.connections.deleteMany({
       where: {
         OR: [
@@ -120,6 +125,8 @@ describe("connections endpoints", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.connectionsList).toEqual([]);
+      expect(res.body.hasMore).toBe(false);
+      expect(res.body.nextCursor).toBeNull();
     });
 
     it("returns connections where user is the requester", async () => {
@@ -127,12 +134,30 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create a connection where user1 is the requester
-      await prisma.connections.create({
+      const connection = await prisma.connections.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
           type: "ACQUAINTANCE"
         }
+      });
+
+      // Create adjacency rows
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: connection.id,
+            type: "ACQUAINTANCE"
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: connection.id,
+            type: "ACQUAINTANCE"
+          }
+        ]
       });
 
       const res = await request(app)
@@ -155,12 +180,30 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create a connection where user1 is the requested
-      await prisma.connections.create({
+      const connection = await prisma.connections.create({
         data: {
           requesterId: user2.id,
           requestedId: user1.id,
           type: "STRANGER"
         }
+      });
+
+      // Create adjacency rows
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: connection.id,
+            type: "STRANGER"
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: connection.id,
+            type: "STRANGER"
+          }
+        ]
       });
 
       const res = await request(app)
@@ -187,22 +230,51 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create multiple connections
-      await Promise.all([
-        prisma.connections.create({
-          data: {
-            requesterId: user1.id,
-            requestedId: user2.id,
+      const conn1 = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+      
+      const conn2 = await prisma.connections.create({
+        data: {
+          requesterId: user3.id,
+          requestedId: user1.id,
+          type: "IS_FOLLOWING"
+        }
+      });
+
+      // Create adjacency rows for both connections
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: conn1.id,
             type: "ACQUAINTANCE"
-          }
-        }),
-        prisma.connections.create({
-          data: {
-            requesterId: user3.id,
-            requestedId: user1.id,
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: conn1.id,
+            type: "ACQUAINTANCE"
+          },
+          {
+            userId: user1.id,
+            otherUserId: user3.id,
+            connectionId: conn2.id,
+            type: "IS_FOLLOWING"
+          },
+          {
+            userId: user3.id,
+            otherUserId: user1.id,
+            connectionId: conn2.id,
             type: "IS_FOLLOWING"
           }
-        })
-      ]);
+        ]
+      });
 
       const res = await request(app)
         .get("/connections")
@@ -248,6 +320,40 @@ describe("connections endpoints", () => {
         }
       });
 
+      // Create adjacency rows
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: firstConnection.id,
+            type: "ACQUAINTANCE",
+            createdAt: firstConnection.since
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: firstConnection.id,
+            type: "ACQUAINTANCE",
+            createdAt: firstConnection.since
+          },
+          {
+            userId: user1.id,
+            otherUserId: user3.id,
+            connectionId: secondConnection.id,
+            type: "STRANGER",
+            createdAt: secondConnection.since
+          },
+          {
+            userId: user3.id,
+            otherUserId: user1.id,
+            connectionId: secondConnection.id,
+            type: "STRANGER",
+            createdAt: secondConnection.since
+          }
+        ]
+      });
+
       const res = await request(app)
         .get("/connections")
         .set("Authorization", `Bearer ${token}`);
@@ -264,12 +370,30 @@ describe("connections endpoints", () => {
       const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
       const token = getAuthToken(user1.id);
 
-      await prisma.connections.create({
+      const connection = await prisma.connections.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
           type: "ACQUAINTANCE"
         }
+      });
+
+      // Create adjacency rows
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: connection.id,
+            type: "ACQUAINTANCE"
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: connection.id,
+            type: "ACQUAINTANCE"
+          }
+        ]
       });
 
       const res = await request(app)
@@ -285,6 +409,137 @@ describe("connections endpoints", () => {
       expect(res.body.connectionsList[0]).toHaveProperty('profilePhoto');
       expect(res.body.connectionsList[0]).toHaveProperty('type');
       expect(res.body.connectionsList[0]).toHaveProperty('createdAt');
+    });
+
+    it("supports pagination with limit and cursor", async () => {
+      const user1 = await createTestUser();
+      const otherUsers = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+      const token = getAuthToken(user1.id);
+
+      // Create connections with different timestamps
+      for (let i = 0; i < otherUsers.length; i++) {
+        const connection = await prisma.connections.create({
+          data: {
+            requesterId: user1.id,
+            requestedId: otherUsers[i].id,
+            type: "ACQUAINTANCE"
+          }
+        });
+
+        await prisma.userConnection.createMany({
+          data: [
+            {
+              userId: user1.id,
+              otherUserId: otherUsers[i].id,
+              connectionId: connection.id,
+              type: "ACQUAINTANCE"
+            },
+            {
+              userId: otherUsers[i].id,
+              otherUserId: user1.id,
+              connectionId: connection.id,
+              type: "ACQUAINTANCE"
+            }
+          ]
+        });
+
+        // Small delay to ensure different timestamps
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+
+      // Get first page with limit=2
+      const res1 = await request(app)
+        .get("/connections?limit=2")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.connectionsList).toHaveLength(2);
+      expect(res1.body.hasMore).toBe(true);
+      expect(res1.body.nextCursor).toBeTruthy();
+
+      // Get second page using cursor
+      const res2 = await request(app)
+        .get(`/connections?limit=2&cursor=${res1.body.nextCursor}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.connectionsList).toHaveLength(1);
+      expect(res2.body.hasMore).toBe(false);
+    });
+
+    it("supports filtering by connection type", async () => {
+      const [user1, user2, user3] = await Promise.all([
+        createTestUser(),
+        createTestUser(),
+        createTestUser()
+      ]);
+      const token = getAuthToken(user1.id);
+
+      // Create ACQUAINTANCE connection
+      const conn1 = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user2.id,
+          type: "ACQUAINTANCE"
+        }
+      });
+
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: conn1.id,
+            type: "ACQUAINTANCE"
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: conn1.id,
+            type: "ACQUAINTANCE"
+          }
+        ]
+      });
+
+      // Create IS_FOLLOWING connection
+      const conn2 = await prisma.connections.create({
+        data: {
+          requesterId: user1.id,
+          requestedId: user3.id,
+          type: "IS_FOLLOWING"
+        }
+      });
+
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user3.id,
+            connectionId: conn2.id,
+            type: "IS_FOLLOWING"
+          },
+          {
+            userId: user3.id,
+            otherUserId: user1.id,
+            connectionId: conn2.id,
+            type: "IS_FOLLOWING"
+          }
+        ]
+      });
+
+      // Filter for ACQUAINTANCE only
+      const res = await request(app)
+        .get("/connections?type=ACQUAINTANCE")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.connectionsList).toHaveLength(1);
+      expect(res.body.connectionsList[0].type).toBe("ACQUAINTANCE");
+      expect(res.body.connectionsList[0].userId).toBe(user2.id);
     });
   });
 
@@ -1384,6 +1639,23 @@ describe("connections endpoints", () => {
       });
       expect(connection).toBeTruthy();
       expect(connection?.type).toBe("ACQUAINTANCE");
+
+      // Verify two adjacency rows were created
+      const adjacencies = await prisma.userConnection.findMany({
+        where: { connectionId: connection?.id }
+      });
+      expect(adjacencies).toHaveLength(2);
+      
+      const requesterAdj = adjacencies.find((a: any) => a.userId === requester.id);
+      const requestedAdj = adjacencies.find((a: any) => a.userId === requested.id);
+      
+      expect(requesterAdj).toBeTruthy();
+      expect(requesterAdj?.otherUserId).toBe(requested.id);
+      expect(requesterAdj?.type).toBe("ACQUAINTANCE");
+      
+      expect(requestedAdj).toBeTruthy();
+      expect(requestedAdj?.otherUserId).toBe(requester.id);
+      expect(requestedAdj?.type).toBe("ACQUAINTANCE");
     });
 
     it("successfully accepts STRANGER request - verifies status=ACCEPTED and creates STRANGER connection", async () => {
@@ -2043,6 +2315,24 @@ describe("connections endpoints", () => {
         }
       });
 
+      // Create adjacency rows
+      await prisma.userConnection.createMany({
+        data: [
+          {
+            userId: user1.id,
+            otherUserId: user2.id,
+            connectionId: connection.id,
+            type: "ACQUAINTANCE"
+          },
+          {
+            userId: user2.id,
+            otherUserId: user1.id,
+            connectionId: connection.id,
+            type: "ACQUAINTANCE"
+          }
+        ]
+      });
+
       const res = await request(app)
         .delete(`/connections/${user2.id}`)
         .set("Authorization", `Bearer ${token}`);
@@ -2059,6 +2349,12 @@ describe("connections endpoints", () => {
         where: { id: connection.id }
       });
       expect(deletedConnection).toBeNull();
+
+      // Verify both adjacency rows were deleted
+      const remainingAdjacencies = await prisma.userConnection.findMany({
+        where: { connectionId: connection.id }
+      });
+      expect(remainingAdjacencies).toHaveLength(0);
     });
 
     it("successfully deletes STRANGER connection type", async () => {

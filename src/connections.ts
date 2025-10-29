@@ -12,28 +12,32 @@ router.get("/connections", auth, async (req, res) => {
   }
   const sessionUserId = req.user.id;
 
-  try {
-    const connectionsList: any[] = [];
+  // Pagination parameters
+  const limit = parseInt(req.query.limit as string) || 50;
+  const cursor = req.query.cursor as string | undefined;
+  const typeFilter = req.query.type as string | undefined;
 
-    // Fetch all connections where session user is either requester or requested
-    const connections = await prisma.connections.findMany({
-      where: {
-        OR: [
-          { requesterId: sessionUserId },
-          { requestedId: sessionUserId }
-        ]
-      },
+  try {
+    // Build where clause
+    const whereClause: any = {
+      userId: sessionUserId
+    };
+
+    // Add type filter if provided
+    if (typeFilter && ["ACQUAINTANCE", "STRANGER", "IS_FOLLOWING"].includes(typeFilter)) {
+      whereClause.type = typeFilter;
+    }
+
+    // Add cursor for pagination
+    if (cursor) {
+      whereClause.createdAt = { lt: new Date(cursor) };
+    }
+
+    // Fetch user connections using adjacency table
+    const userConnections = await prisma.userConnection.findMany({
+      where: whereClause,
       include: {
-        requester: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            username: true,
-            profilePhoto: true
-          }
-        },
-        requested: {
+        user: {
           select: {
             id: true,
             firstName: true,
@@ -43,30 +47,60 @@ router.get("/connections", auth, async (req, res) => {
           }
         }
       },
-      orderBy: {
-        since: 'desc'
+      orderBy: [
+        { createdAt: 'desc' },
+        { otherUserId: 'asc' }
+      ],
+      take: limit + 1 // Fetch one extra to determine if there are more results
+    });
+
+    // Determine if there are more results
+    const hasMore = userConnections.length > limit;
+    const results = hasMore ? userConnections.slice(0, limit) : userConnections;
+
+    // Fetch the "other" users' data
+    const otherUserIds = results.map((uc: any) => uc.otherUserId);
+    const otherUsers = await prisma.users.findMany({
+      where: {
+        id: { in: otherUserIds }
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        username: true,
+        profilePhoto: true
       }
     });
 
-    // Process each connection to include the other user's info
-    for (const connection of connections) {
-      // Determine which user is the "other" user (not the session user)
-      const isRequester = connection.requesterId === sessionUserId;
-      const otherUser = isRequester ? connection.requested : connection.requester;
+    // Create a map for quick lookup
+    const otherUsersMap = new Map(otherUsers.map((u: any) => [u.id, u]));
 
-      connectionsList.push({
-        id: connection.id,
-        userId: otherUser.id,
-        firstName: otherUser.firstName,
-        lastName: otherUser.lastName,
-        username: otherUser.username,
-        profilePhoto: otherUser.profilePhoto,
-        type: connection.type,
-        createdAt: connection.since
-      });
-    }
+    // Build response
+    const connectionsList = results.map((uc: any) => {
+      const otherUser = otherUsersMap.get(uc.otherUserId);
+      return {
+        id: uc.connectionId,
+        userId: uc.otherUserId,
+        firstName: (otherUser as any)?.firstName || '',
+        lastName: (otherUser as any)?.lastName || '',
+        username: (otherUser as any)?.username || '',
+        profilePhoto: (otherUser as any)?.profilePhoto || '',
+        type: uc.type,
+        createdAt: uc.createdAt
+      };
+    });
 
-    return res.status(200).json({ connectionsList });
+    // Get next cursor if there are more results
+    const nextCursor = hasMore && results.length > 0
+      ? results[results.length - 1].createdAt.toISOString()
+      : null;
+
+    return res.status(200).json({
+      connectionsList,
+      nextCursor,
+      hasMore
+    });
 
   } catch (error) {
     console.error("Get connections error:", error);
@@ -388,7 +422,7 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
     }
 
     // Use transaction to update request status and handle connection
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Update the connection request status to ACCEPTED
       const updatedRequest = await tx.connectionRequest.update({
         where: { id: requestId },
@@ -409,18 +443,23 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
       });
 
       let connection;
+      const connectionType = connectionRequest.type === "FOLLOW" ? "IS_FOLLOWING" : connectionRequest.type;
+      
       if (existingConnection) {
         // Update existing connection with the new type
-        const connectionType = connectionRequest.type === "FOLLOW" ? "IS_FOLLOWING" : connectionRequest.type;
         connection = await tx.connections.update({
           where: { id: existingConnection.id },
           data: {
             type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
           }
         });
+
+        // Delete old adjacency rows for this connection
+        await tx.userConnection.deleteMany({
+          where: { connectionId: existingConnection.id }
+        });
       } else {
         // Create new connection
-        const connectionType = connectionRequest.type === "FOLLOW" ? "IS_FOLLOWING" : connectionRequest.type;
         connection = await tx.connections.create({
           data: {
             requesterId: connectionRequest.requesterId,
@@ -428,6 +467,71 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
             type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
           }
         });
+      }
+
+      // 3. Insert adjacency rows with idempotency
+      // IS_FOLLOWING is one-directional (requester follows requested)
+      // ACQUAINTANCE and STRANGER are bidirectional
+      if (connectionType === "IS_FOLLOWING") {
+        // Only create one entry: follower -> followed
+        await tx.userConnection.upsert({
+          where: {
+            userId_otherUserId_type: {
+              userId: connectionRequest.requesterId,
+              otherUserId: connectionRequest.requestedId,
+              type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+            }
+          },
+          create: {
+            userId: connectionRequest.requesterId,
+            otherUserId: connectionRequest.requestedId,
+            connectionId: connection.id,
+            type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+          },
+          update: {
+            connectionId: connection.id
+          }
+        });
+      } else {
+        // Create both directions for bidirectional connections (ACQUAINTANCE, STRANGER)
+        await Promise.all([
+          tx.userConnection.upsert({
+            where: {
+              userId_otherUserId_type: {
+                userId: connectionRequest.requesterId,
+                otherUserId: connectionRequest.requestedId,
+                type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+              }
+            },
+            create: {
+              userId: connectionRequest.requesterId,
+              otherUserId: connectionRequest.requestedId,
+              connectionId: connection.id,
+              type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+            },
+            update: {
+              connectionId: connection.id
+            }
+          }),
+          tx.userConnection.upsert({
+            where: {
+              userId_otherUserId_type: {
+                userId: connectionRequest.requestedId,
+                otherUserId: connectionRequest.requesterId,
+                type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+              }
+            },
+            create: {
+              userId: connectionRequest.requestedId,
+              otherUserId: connectionRequest.requesterId,
+              connectionId: connection.id,
+              type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
+            },
+            update: {
+              connectionId: connection.id
+            }
+          })
+        ]);
       }
 
       return { updatedRequest, connection };
@@ -645,14 +749,26 @@ router.delete("/connections/:id", auth, async (req, res) => {
       return res.status(404).send("Connection not found");
     }
 
-    // Delete the connection
-    await prisma.connections.delete({
-      where: { id: existingConnection.id }
+    // Delete the connection and adjacency rows in a transaction
+    const result = await prisma.$transaction(async (tx: any) => {
+      // 1. Delete both adjacency rows
+      await tx.userConnection.deleteMany({
+        where: {
+          connectionId: existingConnection.id
+        }
+      });
+
+      // 2. Delete the connection
+      await tx.connections.delete({
+        where: { id: existingConnection.id }
+      });
+
+      return existingConnection;
     });
 
     return res.status(200).json({
       message: "Connection deleted successfully",
-      deletedConnectionId: existingConnection.id,
+      deletedConnectionId: result.id,
       otherUserId: otherUserId
     });
 

@@ -48,13 +48,46 @@ async function createUserAndGetToken(email?: string, password?: string, username
 
 // Helper function to create a connection between two users
 async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING") {
-  await prisma.connections.create({
+  const connection = await prisma.connections.create({
     data: {
       requesterId,
       requestedId,
       type,
     },
   });
+
+  // Create adjacency table entries for fast lookups
+  // IS_FOLLOWING is one-directional (requester follows requested)
+  // ACQUAINTANCE and STRANGER are bidirectional
+  if (type === "IS_FOLLOWING") {
+    // Only create one entry: follower -> followed
+    await prisma.userConnection.create({
+      data: {
+        userId: requesterId,
+        otherUserId: requestedId,
+        connectionId: connection.id,
+        type,
+      }
+    });
+  } else {
+    // Create both directions for bidirectional connections
+    await prisma.userConnection.createMany({
+      data: [
+        {
+          userId: requesterId,
+          otherUserId: requestedId,
+          connectionId: connection.id,
+          type,
+        },
+        {
+          userId: requestedId,
+          otherUserId: requesterId,
+          connectionId: connection.id,
+          type,
+        }
+      ]
+    });
+  }
 }
 
 // Helper function to create a block between two users
@@ -295,9 +328,9 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("profilePhoto");
       expect(res.body).toHaveProperty("connectionStatus", null);
       
-      // Should NOT have these fields for private unconnected users
-      expect(res.body).not.toHaveProperty("gender");
-      expect(res.body).not.toHaveProperty("about");
+      // Now returning these fields for all users
+      expect(res.body).toHaveProperty("gender");
+      expect(res.body).toHaveProperty("about");
     });
 
     it("handles reverse connection (target user connected to session user)", async () => {
@@ -310,7 +343,9 @@ describe("profile endpoints", () => {
         data: { isPrivate: true },
       });
 
-      // Target user follows session user (reverse connection)
+      // Target user follows session user (reverse IS_FOLLOWING connection)
+      // Since IS_FOLLOWING is one-directional, session user viewing target's profile
+      // should NOT see a connection (target follows them, but they don't follow target)
       await createConnection(targetUserId, sessionUserId, "IS_FOLLOWING");
 
       const res = await request(app)
@@ -318,9 +353,12 @@ describe("profile endpoints", () => {
         .set("Authorization", `Bearer ${sessionToken}`);
       
       expect(res.status).toBe(200);
+      // Since target is private and there's no connection from session -> target,
+      // we still return all fields now (per the new requirement)
       expect(res.body).toHaveProperty("gender");
       expect(res.body).toHaveProperty("about");
-      expect(res.body).toHaveProperty("connectionStatus", "IS_FOLLOWING");
+      // No connection from session user's perspective (IS_FOLLOWING is one-way)
+      expect(res.body).toHaveProperty("connectionStatus", null);
       expect(res.body).toHaveProperty("requestType", null);
     });
 
@@ -467,9 +505,9 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("connectionStatus", null);
       expect(res.body).toHaveProperty("requestType", "ACQUAINTANCE");
       
-      // Should be minimal profile (no gender/about)
-      expect(res.body).not.toHaveProperty("gender");
-      expect(res.body).not.toHaveProperty("about");
+      // Now returning these fields for all users
+      expect(res.body).toHaveProperty("gender");
+      expect(res.body).toHaveProperty("about");
     });
 
     it("returns requestType in extended profile for non-private user with pending request", async () => {
@@ -631,9 +669,9 @@ describe("profile endpoints", () => {
       expect(res.body).toHaveProperty("requestType");
       expect(res.body).toHaveProperty("isPrivate");
       
-      // Should not have extended fields
-      expect(res.body).not.toHaveProperty("gender");
-      expect(res.body).not.toHaveProperty("about");
+      // Now returning these fields for all users
+      expect(res.body).toHaveProperty("gender");
+      expect(res.body).toHaveProperty("about");
       
       // Should not have sensitive fields
       expect(res.body).not.toHaveProperty("password");

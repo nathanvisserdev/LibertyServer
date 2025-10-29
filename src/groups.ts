@@ -87,46 +87,37 @@ router.get("/groups/mutuals", auth, async (req, res) => {
   const userId = me.id;
 
   try {
-    // Get user's connections (all types: ACQUAINTANCE, STRANGER, IS_FOLLOWING)
-    const connections = await prisma.connections.findMany({
+    // Get user's connections using adjacency table
+    const userConnections = await prisma.userConnection.findMany({
       where: {
-        OR: [
-          { requesterId: userId },
-          { requestedId: userId }
-        ]
+        userId: userId
       },
-      include: {
-        requester: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            isHidden: true,
-            isBanned: true
-          }
-        },
-        requested: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            isHidden: true,
-            isBanned: true
-          }
-        }
+      select: {
+        otherUserId: true
       }
     });
 
-    // Extract connection user IDs (excluding current user)
-    const connectionUserIds = connections
-      .map(conn => conn.requesterId === userId ? conn.requestedId : conn.requesterId)
-      .filter(id => id !== userId);
+    // Extract connection user IDs
+    const connectionUserIds = userConnections.map(conn => conn.otherUserId);
 
     if (connectionUserIds.length === 0) {
       return res.json([]);
     }
+
+    // Fetch user details for validation
+    const connectedUsers = await prisma.users.findMany({
+      where: {
+        id: { in: connectionUserIds }
+      },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        isHidden: true,
+        isBanned: true
+      }
+    });
 
     // Get blocks to filter out blocked users
     const blocks = await prisma.blocks.findMany({
@@ -139,29 +130,15 @@ router.get("/groups/mutuals", auth, async (req, res) => {
     });
 
     const blockedUserIds = new Set(
-      blocks.map(block => 
+      blocks.map((block: any) => 
         block.blockerId === userId ? block.blockedId : block.blockerId
       )
     );
 
     // Filter connections to exclude hidden, banned, or blocked users
-    const validConnectionUserIds = connectionUserIds.filter(connId => {
-      if (blockedUserIds.has(connId)) return false;
-      
-      const connection = connections.find(conn => 
-        (conn.requesterId === userId && conn.requestedId === connId) ||
-        (conn.requestedId === userId && conn.requesterId === connId)
-      );
-      
-      if (!connection) return false;
-      
-      const connectedUser = connection.requesterId === userId ? connection.requested : connection.requester;
-      
-      // Exclude hidden or banned users
-      if (connectedUser.isHidden || connectedUser.isBanned) return false;
-      
-      return true;
-    });
+    const validConnectionUserIds = connectedUsers
+      .filter((user: any) => !user.isHidden && !user.isBanned && !blockedUserIds.has(user.id))
+      .map((user: any) => user.id);
 
     if (validConnectionUserIds.length === 0) {
       return res.json([]);
@@ -928,42 +905,33 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
   }
 
   try {
-    // Get requester's connections
-    const connections = await prisma.connections.findMany({
+    // Get requester's connections using adjacency table
+    const userConnections = await prisma.userConnection.findMany({
       where: {
-        OR: [
-          { requesterId: requesterId },
-          { requestedId: requesterId }
-        ]
+        userId: requesterId
       },
-      include: {
-        requester: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            isHidden: true,
-            isBanned: true
-          }
-        },
-        requested: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            isHidden: true,
-            isBanned: true
-          }
-        }
+      select: {
+        otherUserId: true
       }
     });
 
-    // Extract connection user IDs (excluding current user)
-    const connectionUserIds = connections
-      .map(conn => conn.requesterId === requesterId ? conn.requestedId : conn.requesterId)
-      .filter(id => id !== requesterId);
+    // Extract connection user IDs
+    const connectionUserIds = userConnections.map((conn: any) => conn.otherUserId);
+
+    // Fetch user details for validation
+    const connectedUsers = await prisma.users.findMany({
+      where: {
+        id: { in: connectionUserIds }
+      },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        isHidden: true,
+        isBanned: true
+      }
+    });
 
     // Get blocks to filter out blocked users
     const blocks = await prisma.blocks.findMany({
@@ -976,29 +944,15 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     });
 
     const blockedUserIds = new Set(
-      blocks.map(block => 
+      blocks.map((block: any) => 
         block.blockerId === requesterId ? block.blockedId : block.blockerId
       )
     );
 
     // Filter connections to exclude hidden, banned, or blocked users
-    const validConnectionUserIds = connectionUserIds.filter(connId => {
-      if (blockedUserIds.has(connId)) return false;
-      
-      const connection = connections.find(conn => 
-        (conn.requesterId === requesterId && conn.requestedId === connId) ||
-        (conn.requestedId === requesterId && conn.requesterId === connId)
-      );
-      
-      if (!connection) return false;
-      
-      const connectedUser = connection.requesterId === requesterId ? connection.requested : connection.requester;
-      
-      // Exclude hidden or banned users
-      if (connectedUser.isHidden || connectedUser.isBanned) return false;
-      
-      return true;
-    });
+    const validConnectionUserIds = connectedUsers
+      .filter((user: any) => !user.isHidden && !user.isBanned && !blockedUserIds.has(user.id))
+      .map((user: any) => user.id);
 
     // Get all groups where the target user is a member (not banned)
     const memberships = await prisma.groupMember.findMany({
