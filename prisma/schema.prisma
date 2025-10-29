@@ -33,6 +33,17 @@ enum ConnectionType {
   IS_FOLLOWING
 }
 
+enum PostVisibility {
+  PUBLIC        // shows in Public Square if not in PRIVATE/PERSONAL group
+  CONNECTIONS   // author's connections only
+  GROUP         // governed by group membership
+}
+
+enum MediaOrientation {
+  LANDSCAPE
+  PORTRAIT
+}
+
 enum GroupType {
   AUTOCRATIC
   ROUND_TABLE
@@ -98,18 +109,21 @@ enum VoteChoice {
   ABSTAIN
 }
 
-enum PostVisibility {
-  PUBLIC        // shows in Public Square if not in PRIVATE/PERSONAL group
-  CONNECTIONS   // author's connections only
-  GROUP         // governed by group membership
+enum SubNetworkRole {
+  OWNER
+  MANAGER
+  CONTRIBUTOR
+  VIEWER
 }
 
-enum MediaOrientation {
-  LANDSCAPE
-  PORTRAIT
+enum SubNetworkVisibility {
+  PRIVATE
+  ACQUAINTANCES
+  CONNECTIONS
+  PUBLIC
 }
 
-model Users {
+model User {
   id            String    @id @default(cuid())
   email         String    @unique
   password      String
@@ -130,41 +144,48 @@ model Users {
   isPaid        Boolean   @default(false)
   isBanned      Boolean   @default(false)
 
-  posts         Posts[]
+  posts         Post[]
   groups        GroupMember[]
 
-  userConnections UserConnection[] @relation("UserConnection_user")
-  outgoingRequests ConnectionRequest[] @relation("req_outgoing")
-  incomingRequests ConnectionRequest[] @relation("req_incoming")
-  following Connections[] @relation("conn_outgoing")
-  followers Connections[] @relation("conn_incoming")
-  blocksInitiated Blocks[] @relation("blocks_blocker")
-  blocksReceived  Blocks[] @relation("blocks_blocked")
+  userConnections   UserConnection[] @relation("UserConnection_user")
+  outgoingRequests  ConnectionRequest[] @relation("req_outgoing")
+  incomingRequests  ConnectionRequest[] @relation("req_incoming")
+  following         Connection[] @relation("conn_outgoing")
+  followers         Connection[] @relation("conn_incoming")
+  blocksInitiated   Block[] @relation("blocks_blocker")
+  blocksReceived    Block[] @relation("blocks_blocked")
 
-  adminGroups Groups[] @relation("GroupAdmin")
-  sentInvites     GroupInvite[] @relation("Invite_Inviter")
-  receivedInvites GroupInvite[] @relation("Invite_Invitee")
-  decidedInvites  GroupInvite[] @relation("Invite_Decider")
-  vouchedInvites  GroupInvite[] @relation("Invite_Voucher")
+  adminGroups       Group[] @relation("GroupAdmin")
+  sentInvites       GroupInvite[] @relation("Invite_Inviter")
+  receivedInvites   GroupInvite[] @relation("Invite_Invitee")
+  decidedInvites    GroupInvite[] @relation("Invite_Decider")
+  vouchedInvites    GroupInvite[] @relation("Invite_Voucher")
 
-  joinRequests           JoinGroup[] @relation("Join_Requester")
-  decidedJoinRequests    JoinGroup[] @relation("Join_Decider")
-  preferredReviewerFor   JoinGroup[] @relation("Join_PreferredReviewer")
-  vouchedJoinRequests    JoinGroup[] @relation("Join_Voucher")
+  joinRequests         JoinGroup[] @relation("Join_Requester")
+  decidedJoinRequests  JoinGroup[] @relation("Join_Decider")
+  preferredReviewerFor JoinGroup[] @relation("Join_PreferredReviewer")
+  vouchedJoinRequests  JoinGroup[] @relation("Join_Voucher")
 
-  roundTableAdmin     RoundTable[] @relation("RoundTable_Admin")
-  roundTableViceChair RoundTable[] @relation("RoundTable_Vice")
-  roundTableMemberships RoundTableMember[]
+  roundTableAdmin        RoundTable[] @relation("RoundTable_Admin")
+  roundTableViceChair    RoundTable[] @relation("RoundTable_Vice")
+  roundTableMemberships  RoundTableMember[]
   roundTableMotionsCreated RoundTableMotion[]
-  roundTableLogs      RoundTableLog[]
-  roundTableContinuity RoundTableContinuity[]
+  roundTableLogs         RoundTableLog[]
+  roundTableContinuity   RoundTableContinuity[]
 
-  // device tokens for push notifications
   deviceTokens DeviceToken[] @relation("UserDeviceTokens")
 
   pendingRequestCount Int @default(0)
 
+  // Sub-Networks
+  subnetworks            SubNetwork[] @relation("OwnedSubNetworks")
+  subNetworkMemberships  SubNetworkMember[]
+
+  defaultSubNetworkId    String?
+  defaultSubNetwork      SubNetwork? @relation("DefaultSubNetwork", fields: [defaultSubNetworkId], references: [id], onDelete: SetNull)
+
   @@index([isPaid])
+  @@index([defaultSubNetworkId])
 }
 
 model DeviceToken {
@@ -175,12 +196,12 @@ model DeviceToken {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user Users @relation("UserDeviceTokens", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserDeviceTokens", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
-model Groups {
+model Group {
   id          String    @id @default(cuid())
   name        String
   description String?
@@ -193,13 +214,13 @@ model Groups {
   membershipHidden Boolean @default(false)
 
   adminId     String
-  admin       Users        @relation("GroupAdmin", fields: [adminId], references: [id])
+  admin       User        @relation("GroupAdmin", fields: [adminId], references: [id])
   groupJoinPolicy GroupJoinPolicy @default(CHAIR)
   vouchingEnabled Boolean         @default(false)
 
   // foreign key (optional 1:1 RoundTable)
   roundTable  RoundTable?
-  posts       Posts[]
+  posts       Post[]
   members     GroupMember[]
   invites     GroupInvite[]
   joinRequests JoinGroup[]
@@ -230,11 +251,11 @@ model GroupInvite {
   vouchStatus RequestStatus? @default(ACCEPTED)
   vouchNote   String?
 
-  group       Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  invitee     Users  @relation("Invite_Invitee",  fields: [inviteeId],   references: [id], onDelete: Cascade)
-  inviter     Users  @relation("Invite_Inviter",  fields: [inviterId],   references: [id])
-  decidedBy   Users? @relation("Invite_Decider",  fields: [decidedById], references: [id])
-  voucher     Users? @relation("Invite_Voucher",  fields: [voucherId],   references: [id])
+  group       Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitee     User  @relation("Invite_Invitee",  fields: [inviteeId],   references: [id], onDelete: Cascade)
+  inviter     User  @relation("Invite_Inviter",  fields: [inviterId],   references: [id])
+  decidedBy   User? @relation("Invite_Decider",  fields: [decidedById], references: [id])
+  voucher     User? @relation("Invite_Voucher",  fields: [voucherId],   references: [id])
 
   @@index([groupId, status, createdAt])
   @@index([inviteeId, status])
@@ -259,11 +280,11 @@ model JoinGroup {
   vouchNote           String?
   relationshipType    ConnectionType?
 
-  group              Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  requester          Users  @relation("Join_Requester",          fields: [requesterId],         references: [id], onDelete: Cascade)
-  decidedBy          Users? @relation("Join_Decider",            fields: [decidedById],         references: [id])
-  preferredReviewer  Users? @relation("Join_PreferredReviewer",  fields: [preferredReviewerId], references: [id])
-  voucher            Users? @relation("Join_Voucher",            fields: [voucherId],           references: [id])
+  group              Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester          User  @relation("Join_Requester",          fields: [requesterId],         references: [id], onDelete: Cascade)
+  decidedBy          User? @relation("Join_Decider",            fields: [decidedById],         references: [id])
+  preferredReviewer  User? @relation("Join_PreferredReviewer",  fields: [preferredReviewerId], references: [id])
+  voucher            User? @relation("Join_Voucher",            fields: [voucherId],           references: [id])
 
   @@index([groupId, status, createdAt])
   @@index([requesterId, status])
@@ -274,13 +295,13 @@ model JoinGroup {
 model RoundTable {
   // 1:1 to Groups; not all groups have one
   groupId                String   @id
-  group                  Groups   @relation(fields: [groupId], references: [id])
+  group                  Group   @relation(fields: [groupId], references: [id])
 
   // Round table roles
   adminId                String
-  admin                  Users    @relation("RoundTable_Admin", fields: [adminId], references: [id])
+  admin                  User    @relation("RoundTable_Admin", fields: [adminId], references: [id])
   viceChairId            String?
-  viceChair              Users?   @relation("RoundTable_Vice", fields: [viceChairId], references: [id])
+  viceChair              User?   @relation("RoundTable_Vice", fields: [viceChairId], references: [id])
 
   // Round table type
   roundTableType         GroupType        @default(AUTOCRATIC) // AUTOCRATIC vs ROUND_TABLE
@@ -318,8 +339,8 @@ model RoundTableMember {
   plannedLeaveNote  String?
 
   roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
-  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  Users  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
   votes RoundTableVote[]
 
   @@unique([groupId, userId])
@@ -340,8 +361,8 @@ model RoundTableMotion {
   passed      Boolean?
 
   roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
-  group   Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  creator Users? @relation(fields: [createdById], references: [id])
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator User? @relation(fields: [createdById], references: [id])
   votes   RoundTableVote[]
 
   @@index([groupId, type, createdAt])
@@ -361,7 +382,6 @@ model RoundTableVote {
   @@index([voterId])
 }
 
-// ===== Logging (split actions; exactly one non-null enforced in app) =====
 model RoundTableLog {
   id        String            @id @default(cuid())
   groupId   String
@@ -373,8 +393,8 @@ model RoundTableLog {
   createdAt DateTime          @default(now())
 
   roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
-  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  actor Users? @relation(fields: [actorId], references: [id])
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
 
   @@index([groupId, createdAt])
   @@index([groupId, unilateral])
@@ -389,31 +409,14 @@ model RoundTableContinuity {
   createdAt DateTime @default(now())
 
   roundTable RoundTable @relation(fields: [groupId], references: [groupId], onDelete: Cascade)
-  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  Users  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
 
   @@unique([groupId, rank])
   @@unique([groupId, userId])
   @@index([groupId])
 }
 
-model Posts {
-  id          String              @id @default(cuid())
-  content     String?
-  createdAt   DateTime            @default(now())
-  userId      String
-  groupId     String?
-  media       String?
-  orientation MediaOrientation?
-  visibility  PostVisibility      @default(PUBLIC)
-
-  user  Users   @relation(fields: [userId], references: [id])
-  group Groups? @relation(fields: [groupId], references: [id])
-
-  @@index([createdAt])
-  @@index([visibility])
-  @@index([groupId])
-}
 
 model GroupMember {
   membershipId String   @id @default(cuid())
@@ -422,10 +425,34 @@ model GroupMember {
   joinedAt     DateTime @default(now())
   isBanned     Boolean @default(false)
 
-  user  Users  @relation(fields: [userId], references: [id])
-  group Groups @relation(fields: [groupId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
 
   @@unique([userId, groupId])
+}
+
+model Post {
+  id            String   @id @default(cuid())
+  content       String?
+  media         String?
+  orientation   MediaOrientation?
+  visibility    PostVisibility @default(PUBLIC)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId        String
+  groupId       String?
+  subNetworkId  String?     // target audience within user's network
+
+  user          User       @relation(fields: [userId], references: [id])
+  group         Group?     @relation(fields: [groupId], references: [id])
+  subNetwork    SubNetwork? @relation(fields: [subNetworkId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt, id])         // profile feed keyset
+  @@index([groupId, createdAt, id])        // group feed
+  @@index([subNetworkId, createdAt, id])   // subnetwork feed
+  @@index([visibility])
 }
 
 model ConnectionRequest {
@@ -437,25 +464,33 @@ model ConnectionRequest {
   createdAt   DateTime       @default(now())
   decidedAt   DateTime?
 
-  requester Users @relation("req_outgoing", fields: [requesterId], references: [id])
-  requested Users @relation("req_incoming", fields: [requestedId], references: [id])
+  requester User @relation("req_outgoing", fields: [requesterId], references: [id])
+  requested User @relation("req_incoming", fields: [requestedId], references: [id])
 
   @@unique([requesterId, requestedId])
   @@index([requesterId, requestedId, type, status])
 }
 
-model Connections {
-  id          String         @id @default(cuid())
-  requesterId String // FOLLOW: followerId; others: min(userA,userB)
-  requestedId String // FOLLOW: userId;  others: max(userA,userB)
+model Connection {
+  id          String   @id @default(cuid())
+
+  // MUTUAL: requesterId=min(userA,userB), requestedId=max(userA,userB)
+  // DIRECTED: requesterId=followerId, requestedId=userId
+  requesterId String
+  requestedId String
+
   type        ConnectionType
-  since       DateTime       @default(now())
+  since       DateTime @default(now())
+
+  requester   User @relation("conn_outgoing", fields: [requesterId], references: [id])
+  requested   User @relation("conn_incoming", fields: [requestedId], references: [id])
 
   adjacencies UserConnection[] @relation("UserConnection_connection")
-  requester Users @relation("conn_outgoing", fields: [requesterId], references: [id])
-  requested Users @relation("conn_incoming", fields: [requestedId], references: [id])
+  subNetworkMembers SubNetworkMember[]
 
   @@unique([requesterId, requestedId, type])
+  @@index([requesterId, requestedId, type])
+  @@index([requestedId, requesterId, type])
 }
 
 model UserConnection {
@@ -465,23 +500,77 @@ model UserConnection {
   type          ConnectionType
   createdAt     DateTime       @default(now())
 
-  user          Users       @relation("UserConnection_user", fields: [userId], references: [id], onDelete: Cascade)
-  connection    Connections @relation("UserConnection_connection", fields: [connectionId], references: [id], onDelete: Cascade)
+  user          User       @relation("UserConnection_user", fields: [userId], references: [id], onDelete: Cascade)
+  connection    Connection @relation("UserConnection_connection", fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@id([userId, otherUserId, type])
   @@index([userId, type, createdAt])
   @@index([otherUserId, type])  // For fast follower lookups
 }
 
+model SubNetwork {
+  id          String   @id @default(cuid())
+  ownerId     String
+  owner       User    @relation("OwnedSubNetworks", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name        String
+  slug        String
+  description String?
+
+  visibility  SubNetworkVisibility @default(PRIVATE)
+  isDefault   Boolean  @default(false)
+  ordering    Int      @default(0)
+
+  // hierarchy (optional layering)
+  parentId    String?
+  parent      SubNetwork?  @relation("SubNetworkHierarchy", fields: [parentId], references: [id])
+  children    SubNetwork[] @relation("SubNetworkHierarchy")
+
+  // denormalized counters
+  memberCount Int      @default(0)
+  postCount   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     SubNetworkMember[]
+  posts       Post[]
+  defaultFor  User[]  @relation("DefaultSubNetwork")
+
+  @@unique([ownerId, slug])                // global-per-owner slug uniqueness
+  @@index([ownerId])
+  @@index([ownerId, createdAt, id])        // keyset pagination for owner's subnetworks
+  @@index([ownerId, parentId, ordering])
+  @@index([parentId])
+}
+
+model SubNetworkMember {
+  id            String         @id @default(cuid())
+  subNetworkId  String
+  userId        String          // fast read key; must be a valid connection to ownerId (enforce in service)
+  connectionId  String          // integrity FK to Connection.id
+
+  role          SubNetworkRole  @default(VIEWER) // OWNER implicit via SubNetwork.ownerId
+  createdAt     DateTime        @default(now())
+
+  subNetwork    SubNetwork      @relation(fields: [subNetworkId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection    Connection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([subNetworkId, userId])
+  @@index([userId, subNetworkId])
+  @@index([subNetworkId, role])
+  @@index([connectionId])
+}
 
 // Directed block: (blockerId -> blockedId)
-model Blocks {
+model Block {
   blockerId String
   blockedId String
   createdAt DateTime @default(now())
 
-  blocker Users @relation("blocks_blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked Users @relation("blocks_blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker User @relation("blocks_blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocks_blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@id([blockerId, blockedId])
   @@index([blockedId])

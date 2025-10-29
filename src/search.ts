@@ -60,7 +60,7 @@ router.get("/search/users", auth, async (req, res) => {
       };
     }
 
-    const users = await prisma.users.findMany({
+    const users = await prisma.user.findMany({
       where: userWhere,
       select: {
         id: true,
@@ -72,7 +72,7 @@ router.get("/search/users", auth, async (req, res) => {
     });
 
     // Search Groups
-    const allGroups = await prisma.groups.findMany({
+    const allGroups = await prisma.group.findMany({
       where: {
         name: {
           contains: query

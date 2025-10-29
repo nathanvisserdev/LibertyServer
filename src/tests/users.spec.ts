@@ -47,7 +47,7 @@ async function createUserAndGetToken(email?: string, password?: string) {
   // Clean up test data after all tests complete
   afterAll(async () => {
     // Only delete test users created by this test file
-    await prisma.users.deleteMany({
+    await prisma.user.deleteMany({
       where: {
         email: {
           contains: testNamespace

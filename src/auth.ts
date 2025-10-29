@@ -13,7 +13,7 @@ router.post("/login", async (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).send("missing fields");
 
-  const user = await prisma.users.findUnique({ where: { email: String(email).toLowerCase() } });
+  const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } });
   if (!user) return res.status(401).send("invalid credentials");
 
   const ok = await bcrypt.compare(String(password), user.password);

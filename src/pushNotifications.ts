@@ -33,7 +33,7 @@ if (apnKeyContent && apnKeyContent.includes("BEGIN PRIVATE KEY")) {
 export async function sendConnectionNotification(userId: string): Promise<void> {
   try {
     // Increment the pending request count in the database
-    const updatedUser = await prisma.users.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         pendingRequestCount: {
@@ -110,7 +110,7 @@ export async function sendConnectionNotification(userId: string): Promise<void> 
  * @param userId - The ID of the user
  */
 export async function resetPendingRequestCount(userId: string): Promise<void> {
-  await prisma.users.update({
+  await prisma.user.update({
     where: { id: userId },
     data: { pendingRequestCount: 0 },
   });

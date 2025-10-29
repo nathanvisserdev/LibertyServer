@@ -17,7 +17,7 @@ describe("auth endpoints", () => {
   // Clean up test data after all tests complete
   afterAll(async () => {
     // Only delete test users created by this test file
-    await prisma.users.deleteMany({
+    await prisma.user.deleteMany({
       where: {
         email: {
           contains: testNamespace
@@ -105,8 +105,8 @@ describe("auth endpoints", () => {
     expect(initialRes.status).toBe(200);
     
     // Ban the user
-    const user = await prisma.users.findUnique({ where: { email } });
-    await prisma.users.update({
+    const user = await prisma.user.findUnique({ where: { email } });
+    await prisma.user.update({
       where: { id: user!.id },
       data: { isBanned: true }
     });

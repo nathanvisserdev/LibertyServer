@@ -12,7 +12,7 @@ router.get("/user/me", auth, async (req, res) => {
   if (!payload || typeof payload !== "object" || !("id" in payload)) {
     return res.status(401).send("Invalid token payload");
   }
-  const user = await prisma.users.findUnique({ 
+  const user = await prisma.user.findUnique({ 
     where: { id: (payload as any).id },
     select: {
       id: true,
@@ -119,7 +119,7 @@ router.patch("/users/:id", auth, async (req, res) => {
   }
 
   try {
-    const updatedUser = await prisma.users.update({
+    const updatedUser = await prisma.user.update({
       where: { id: targetId },
       data: updateData,
       select: {
@@ -183,7 +183,7 @@ router.patch("/users/:id/settings/security", auth, async (req, res) => {
 
   try {
     // Look up the user
-    const user = await prisma.users.findUnique({ where: { id: targetId } });
+    const user = await prisma.user.findUnique({ where: { id: targetId } });
     if (!user) {
       return res.status(404).send("User not found");
     }
@@ -216,7 +216,7 @@ router.patch("/users/:id/settings/security", auth, async (req, res) => {
       }
       
       // Check if email is already in use by another user
-      const existing = await prisma.users.findUnique({ where: { email: emailStr } });
+      const existing = await prisma.user.findUnique({ where: { email: emailStr } });
       if (existing && existing.id !== targetId) {
         return res.status(409).json({ error: "Email already exists" });
       }
@@ -245,7 +245,7 @@ router.patch("/users/:id/settings/security", auth, async (req, res) => {
     }
 
     // Update the user
-    const updatedUser = await prisma.users.update({
+    const updatedUser = await prisma.user.update({
       where: { id: targetId },
       data: updateData,
       select: {
@@ -286,14 +286,14 @@ router.delete("/user/me", auth, async (req, res) => {
     return res.status(400).send("missing password");
   }
 
-  const user = await prisma.users.findUnique({ where: { id: me } });
+  const user = await prisma.user.findUnique({ where: { id: me } });
   if (!user) return res.status(404).send("User not found");
 
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(401).send("invalid credentials");
 
   // Exclude PERSONAL from the admin check so users aren't blocked by their Social Circle
-  const adminGroups = await prisma.groups.findMany({
+  const adminGroups = await prisma.group.findMany({
     where: { adminId: me, groupPrivacy: { not: "PERSONAL" } },
     select: { id: true },
   });
@@ -309,36 +309,36 @@ router.delete("/user/me", auth, async (req, res) => {
   try {
     await prisma.$transaction(async tx => {
       // Always delete the user's PERSONAL group(s) (Social Circle) and their content
-      const personal = await tx.groups.findMany({
+      const personal = await tx.group.findMany({
         where: { adminId: me, groupPrivacy: "PERSONAL" },
         select: { id: true },
       });
       if (personal.length) {
         const ids = personal.map(g => g.id);
-        await tx.posts.deleteMany({ where: { groupId: { in: ids } } });
+        await tx.post.deleteMany({ where: { groupId: { in: ids } } });
         await tx.groupMember.deleteMany({ where: { groupId: { in: ids } } });
-        await tx.groups.deleteMany({ where: { id: { in: ids } } });
+        await tx.group.deleteMany({ where: { id: { in: ids } } });
       }
 
       // If force=true, delete any OTHER groups they administer (and their content)
       if (force && adminGroups.length) {
         const ids = adminGroups.map(g => g.id);
-        await tx.posts.deleteMany({ where: { groupId: { in: ids } } });
+        await tx.post.deleteMany({ where: { groupId: { in: ids } } });
         await tx.groupMember.deleteMany({ where: { groupId: { in: ids } } });
-        await tx.groups.deleteMany({ where: { id: { in: ids } } });
+        await tx.group.deleteMany({ where: { id: { in: ids } } });
       }
 
       // Connections/requests/blocks/roster/posts (user-level)
       await tx.connectionRequest.deleteMany({ where: { requesterId: me } });
       await tx.connectionRequest.deleteMany({ where: { requestedId: me } });
-      await tx.connections.deleteMany({ where: { requesterId: me } });
-      await tx.connections.deleteMany({ where: { requestedId: me } });
-      await tx.blocks.deleteMany({ where: { OR: [{ blockerId: me }, { blockedId: me }] } });
+      await tx.connection.deleteMany({ where: { requesterId: me } });
+      await tx.connection.deleteMany({ where: { requestedId: me } });
+      await tx.block.deleteMany({ where: { OR: [{ blockerId: me }, { blockedId: me }] } });
       await tx.groupMember.deleteMany({ where: { userId: me } });
-      await tx.posts.deleteMany({ where: { userId: me } });
+      await tx.post.deleteMany({ where: { userId: me } });
 
       // Finally, delete the user
-      await tx.users.delete({ where: { id: me } });
+      await tx.user.delete({ where: { id: me } });
     });
 
     return res.status(204).end();

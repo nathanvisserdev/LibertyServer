@@ -60,7 +60,7 @@ router.get("/connections", auth, async (req, res) => {
 
     // Fetch the "other" users' data
     const otherUserIds = results.map((uc: any) => uc.otherUserId);
-    const otherUsers = await prisma.users.findMany({
+    const otherUsers = await prisma.user.findMany({
       where: {
         id: { in: otherUserIds }
       },
@@ -130,11 +130,11 @@ router.post("/connections/request", auth, async (req, res) => {
   try {
     // Fetch both users
     const [requester, requested] = await Promise.all([
-      prisma.users.findUnique({
+      prisma.user.findUnique({
         where: { id: requesterId },
         select: { id: true, isHidden: true, isBanned: true }
       }),
-      prisma.users.findUnique({
+      prisma.user.findUnique({
         where: { id: requestedId },
         select: { id: true, isHidden: true, isBanned: true }
       })
@@ -145,7 +145,7 @@ router.post("/connections/request", auth, async (req, res) => {
     }
 
     // Check for existing block between users (bidirectional)
-    const blockExists = await prisma.blocks.findFirst({
+    const blockExists = await prisma.block.findFirst({
       where: {
         OR: [
           { blockerId: requesterId, blockedId: requestedId },
@@ -155,7 +155,7 @@ router.post("/connections/request", auth, async (req, res) => {
     });
 
     // Check for existing connection
-    const existingConnection = await prisma.connections.findFirst({
+    const existingConnection = await prisma.connection.findFirst({
       where: {
         OR: [
           { requesterId: requesterId, requestedId: requestedId },
@@ -257,7 +257,7 @@ router.get("/connections/pending/incoming", auth, async (req, res) => {
 
   try {
     // Reset pending request count when user views their requests
-    await prisma.users.update({
+    await prisma.user.update({
       where: { id: sessionUserId },
       data: { pendingRequestCount: 0 },
     });
@@ -408,7 +408,7 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
     }
 
     // Check for existing block between users (bidirectional)
-    const blockExists = await prisma.blocks.findFirst({
+    const blockExists = await prisma.block.findFirst({
       where: {
         OR: [
           { blockerId: connectionRequest.requesterId, blockedId: connectionRequest.requestedId },
@@ -433,7 +433,7 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
       });
 
       // 2. Check for existing connection (bidirectional)
-      const existingConnection = await tx.connections.findFirst({
+      const existingConnection = await tx.connection.findFirst({
         where: {
           OR: [
             { requesterId: connectionRequest.requesterId, requestedId: connectionRequest.requestedId },
@@ -447,7 +447,7 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
       
       if (existingConnection) {
         // Update existing connection with the new type
-        connection = await tx.connections.update({
+        connection = await tx.connection.update({
           where: { id: existingConnection.id },
           data: {
             type: connectionType as "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING"
@@ -460,7 +460,7 @@ router.post("/connections/:requestId/accept", auth, async (req, res) => {
         });
       } else {
         // Create new connection
-        connection = await tx.connections.create({
+        connection = await tx.connection.create({
           data: {
             requesterId: connectionRequest.requesterId,
             requestedId: connectionRequest.requestedId,
@@ -594,7 +594,7 @@ router.post("/connections/:requestId/decline", auth, async (req, res) => {
     }
 
     // Check for existing block between users (bidirectional)
-    const blockExists = await prisma.blocks.findFirst({
+    const blockExists = await prisma.block.findFirst({
       where: {
         OR: [
           { blockerId: connectionRequest.requesterId, blockedId: connectionRequest.requestedId },
@@ -672,7 +672,7 @@ router.delete("/connections/:requestId/cancel", auth, async (req, res) => {
     }
 
     // Check for existing block between users (bidirectional)
-    const blockExists = await prisma.blocks.findFirst({
+    const blockExists = await prisma.block.findFirst({
       where: {
         OR: [
           { blockerId: connectionRequest.requesterId, blockedId: connectionRequest.requestedId },
@@ -726,7 +726,7 @@ router.delete("/connections/:id", auth, async (req, res) => {
 
   try {
     // Check if the other user exists
-    const otherUser = await prisma.users.findUnique({
+    const otherUser = await prisma.user.findUnique({
       where: { id: otherUserId },
       select: { id: true, isHidden: true, isBanned: true }
     });
@@ -736,7 +736,7 @@ router.delete("/connections/:id", auth, async (req, res) => {
     }
 
     // Find existing connection (bidirectional)
-    const existingConnection = await prisma.connections.findFirst({
+    const existingConnection = await prisma.connection.findFirst({
       where: {
         OR: [
           { requesterId: sessionUserId, requestedId: otherUserId },
@@ -759,7 +759,7 @@ router.delete("/connections/:id", auth, async (req, res) => {
       });
 
       // 2. Delete the connection
-      await tx.connections.delete({
+      await tx.connection.delete({
         where: { id: existingConnection.id }
       });
 

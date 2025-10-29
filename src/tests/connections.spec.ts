@@ -27,7 +27,7 @@ async function createTestUser(options: {
   const username = options.username || generateUniqueUsername();
   const password = "testpass123"; // Plain text for test database
 
-  return await prisma.users.create({
+  return await prisma.user.create({
     data: {
       email,
       username,
@@ -45,7 +45,7 @@ async function createTestUser(options: {
 }
 
 async function createBlock(blockerId: string, blockedId: string) {
-  return await prisma.blocks.create({
+  return await prisma.block.create({
     data: {
       blockerId,
       blockedId
@@ -54,7 +54,7 @@ async function createBlock(blockerId: string, blockedId: string) {
 }
 
 async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING") {
-  return await prisma.connections.create({
+  return await prisma.connection.create({
     data: {
       requesterId,
       requestedId,
@@ -83,7 +83,7 @@ describe("connections endpoints", () => {
         user: { email: { contains: testNamespace } }
       }
     });
-    await prisma.connections.deleteMany({
+    await prisma.connection.deleteMany({
       where: {
         OR: [
           { requester: { email: { contains: testNamespace } } },
@@ -91,7 +91,7 @@ describe("connections endpoints", () => {
         ]
       }
     });
-    await prisma.blocks.deleteMany({
+    await prisma.block.deleteMany({
       where: {
         OR: [
           { blocker: { email: { contains: testNamespace } } },
@@ -99,7 +99,7 @@ describe("connections endpoints", () => {
         ]
       }
     });
-    await prisma.users.deleteMany({
+    await prisma.user.deleteMany({
       where: {
         email: { contains: testNamespace }
       }
@@ -134,7 +134,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create a connection where user1 is the requester
-      const connection = await prisma.connections.create({
+      const connection = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -180,7 +180,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create a connection where user1 is the requested
-      const connection = await prisma.connections.create({
+      const connection = await prisma.connection.create({
         data: {
           requesterId: user2.id,
           requestedId: user1.id,
@@ -230,7 +230,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create multiple connections
-      const conn1 = await prisma.connections.create({
+      const conn1 = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -238,7 +238,7 @@ describe("connections endpoints", () => {
         }
       });
       
-      const conn2 = await prisma.connections.create({
+      const conn2 = await prisma.connection.create({
         data: {
           requesterId: user3.id,
           requestedId: user1.id,
@@ -299,7 +299,7 @@ describe("connections endpoints", () => {
 
       // Create connections with different timestamps
       const now = new Date();
-      const firstConnection = await prisma.connections.create({
+      const firstConnection = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -311,7 +311,7 @@ describe("connections endpoints", () => {
       // Wait a bit to ensure different timestamps
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      const secondConnection = await prisma.connections.create({
+      const secondConnection = await prisma.connection.create({
         data: {
           requesterId: user3.id,
           requestedId: user1.id,
@@ -370,7 +370,7 @@ describe("connections endpoints", () => {
       const [user1, user2] = await Promise.all([createTestUser(), createTestUser()]);
       const token = getAuthToken(user1.id);
 
-      const connection = await prisma.connections.create({
+      const connection = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -422,7 +422,7 @@ describe("connections endpoints", () => {
 
       // Create connections with different timestamps
       for (let i = 0; i < otherUsers.length; i++) {
-        const connection = await prisma.connections.create({
+        const connection = await prisma.connection.create({
           data: {
             requesterId: user1.id,
             requestedId: otherUsers[i].id,
@@ -480,7 +480,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create ACQUAINTANCE connection
-      const conn1 = await prisma.connections.create({
+      const conn1 = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -506,7 +506,7 @@ describe("connections endpoints", () => {
       });
 
       // Create IS_FOLLOWING connection
-      const conn2 = await prisma.connections.create({
+      const conn2 = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user3.id,
@@ -1629,7 +1629,7 @@ describe("connections endpoints", () => {
       expect(updatedRequest?.decidedAt).toBeTruthy();
 
       // Verify connection was created
-      const connection = await prisma.connections.findFirst({
+      const connection = await prisma.connection.findFirst({
         where: {
           OR: [
             { requesterId: requester.id, requestedId: requested.id },
@@ -1682,7 +1682,7 @@ describe("connections endpoints", () => {
       expect(res.body.type).toBe("STRANGER");
 
       // Verify connection was created with correct type
-      const connection = await prisma.connections.findFirst({
+      const connection = await prisma.connection.findFirst({
         where: {
           OR: [
             { requesterId: requester.id, requestedId: requested.id },
@@ -1717,7 +1717,7 @@ describe("connections endpoints", () => {
       expect(res.body.type).toBe("IS_FOLLOWING");
 
       // Verify connection was created with correct type (FOLLOW becomes IS_FOLLOWING)
-      const connection = await prisma.connections.findFirst({
+      const connection = await prisma.connection.findFirst({
         where: {
           OR: [
             { requesterId: requester.id, requestedId: requested.id },
@@ -1757,7 +1757,7 @@ describe("connections endpoints", () => {
       expect(res.body.connectionId).toBe(existingConnection.id);
 
       // Verify existing connection was updated
-      const updatedConnection = await prisma.connections.findUnique({
+      const updatedConnection = await prisma.connection.findUnique({
         where: { id: existingConnection.id }
       });
       expect(updatedConnection?.type).toBe("ACQUAINTANCE");
@@ -1931,7 +1931,7 @@ describe("connections endpoints", () => {
       expect(updatedRequest?.decidedAt).toBeTruthy();
 
       // Verify no connection was created in connections table
-      const connection = await prisma.connections.findFirst({
+      const connection = await prisma.connection.findFirst({
         where: {
           OR: [
             { requesterId: requester.id, requestedId: requested.id },
@@ -2170,7 +2170,7 @@ describe("connections endpoints", () => {
       expect(updatedRequest?.decidedAt).toBeTruthy();
 
       // Verify no connection was created in connections table
-      const connection = await prisma.connections.findFirst({
+      const connection = await prisma.connection.findFirst({
         where: {
           OR: [
             { requesterId: requester.id, requestedId: requested.id },
@@ -2307,7 +2307,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create connection where user1 is the requester
-      const connection = await prisma.connections.create({
+      const connection = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -2345,7 +2345,7 @@ describe("connections endpoints", () => {
       });
 
       // Verify connection was deleted from database
-      const deletedConnection = await prisma.connections.findUnique({
+      const deletedConnection = await prisma.connection.findUnique({
         where: { id: connection.id }
       });
       expect(deletedConnection).toBeNull();
@@ -2362,7 +2362,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create connection where user1 is the requested
-      const connection = await prisma.connections.create({
+      const connection = await prisma.connection.create({
         data: {
           requesterId: user2.id,
           requestedId: user1.id,
@@ -2382,7 +2382,7 @@ describe("connections endpoints", () => {
       });
 
       // Verify connection was deleted from database
-      const deletedConnection = await prisma.connections.findUnique({
+      const deletedConnection = await prisma.connection.findUnique({
         where: { id: connection.id }
       });
       expect(deletedConnection).toBeNull();
@@ -2393,7 +2393,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create IS_FOLLOWING connection
-      const connection = await prisma.connections.create({
+      const connection = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -2409,7 +2409,7 @@ describe("connections endpoints", () => {
       expect(res.body.message).toBe("Connection deleted successfully");
 
       // Verify connection was deleted from database
-      const deletedConnection = await prisma.connections.findUnique({
+      const deletedConnection = await prisma.connection.findUnique({
         where: { id: connection.id }
       });
       expect(deletedConnection).toBeNull();
@@ -2424,7 +2424,7 @@ describe("connections endpoints", () => {
       const token = getAuthToken(user1.id);
 
       // Create multiple connections
-      const connection1 = await prisma.connections.create({
+      const connection1 = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user2.id,
@@ -2432,7 +2432,7 @@ describe("connections endpoints", () => {
         }
       });
 
-      const connection2 = await prisma.connections.create({
+      const connection2 = await prisma.connection.create({
         data: {
           requesterId: user1.id,
           requestedId: user3.id,
@@ -2448,13 +2448,13 @@ describe("connections endpoints", () => {
       expect(res.status).toBe(200);
 
       // Verify only the specific connection was deleted
-      const deletedConnection = await prisma.connections.findUnique({
+      const deletedConnection = await prisma.connection.findUnique({
         where: { id: connection1.id }
       });
       expect(deletedConnection).toBeNull();
 
       // Verify other connection still exists
-      const remainingConnection = await prisma.connections.findUnique({
+      const remainingConnection = await prisma.connection.findUnique({
         where: { id: connection2.id }
       });
       expect(remainingConnection).not.toBeNull();

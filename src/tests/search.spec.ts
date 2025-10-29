@@ -71,7 +71,7 @@ async function createUserAndGetToken(
   
   // If isPaid is true, update the user to be paid
   if (isPaid) {
-    await prisma.users.update({
+    await prisma.user.update({
       where: { id: signupRes.body.id },
       data: { isPaid: true }
     });
@@ -94,7 +94,7 @@ describe("search endpoints", () => {
   // Clean up test data after all tests complete
   afterAll(async () => {
     // Only delete test users created by this test file
-    await prisma.users.deleteMany({
+    await prisma.user.deleteMany({
       where: {
         email: {
           contains: testNamespace
@@ -221,7 +221,7 @@ describe("search endpoints", () => {
       // Create a user and then ban them
       const uniqueId = generateUniqueUsernameWithPrefix("banneduser");
       const bannedUser = await createUserAndGetToken(false, { username: uniqueId });
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: bannedUser.userId },
         data: { isBanned: true }
       });

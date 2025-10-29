@@ -88,7 +88,7 @@ router.post("/users/me/photo", auth, async (req, res) => {
     console.log("📸 Saving photo key:", key);
 
     // Update user's profilePhoto with the key
-    const updatedUser = await prisma.users.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { profilePhoto: key },
       select: {

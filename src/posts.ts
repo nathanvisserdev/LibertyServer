@@ -38,7 +38,7 @@ router.post("/posts", auth, async (req, res) => {
   }
 
   // Optional: block banned users from posting
-  const meRow = await prisma.users.findUnique({ where: { id: me.id }, select: { isBanned: true } });
+  const meRow = await prisma.user.findUnique({ where: { id: me.id }, select: { isBanned: true } });
   if (!meRow) return res.status(404).send("User not found");
   if (meRow.isBanned) return res.status(403).send("account banned");
 
@@ -54,7 +54,7 @@ router.post("/posts", auth, async (req, res) => {
     // No groupId -> public post
     if (!groupId) {
       postData.visibility = "PUBLIC";
-      const post = await prisma.posts.create({
+      const post = await prisma.post.create({
         data: postData,
         select: { id: true, content: true, media: true, createdAt: true, userId: true, groupId: true, visibility: true },
       });
@@ -62,7 +62,7 @@ router.post("/posts", auth, async (req, res) => {
     }
 
     // With groupId -> validate group & membership policy
-    const group = await prisma.groups.findUnique({
+    const group = await prisma.group.findUnique({
       where: { id: String(groupId) },
       select: { id: true, groupPrivacy: true },
     });
@@ -88,7 +88,7 @@ router.post("/posts", auth, async (req, res) => {
     postData.groupId = group.id;
     postData.visibility = "GROUP"; // force GROUP visibility
 
-    const post = await prisma.posts.create({
+    const post = await prisma.post.create({
       data: postData,
       select: { id: true, content: true, media: true, createdAt: true, userId: true, groupId: true, visibility: true },
     });
@@ -129,7 +129,7 @@ router.get("/feed", auth, async (req, res) => {
 
   const authorIds = Array.from(new Set([me, ...acquaintances, ...strangers, ...followingIds]));
 
-  const posts = await prisma.posts.findMany({
+  const posts = await prisma.post.findMany({
     where: { userId: { in: authorIds } },
     orderBy: { createdAt: "desc" },
     include: { user: true },
@@ -182,7 +182,7 @@ router.patch("/posts/:postId", auth, async (req, res) => {
   }
 
   // Check if post exists and user owns it
-  const existingPost = await prisma.posts.findUnique({
+  const existingPost = await prisma.post.findUnique({
     where: { id: postId },
     select: { id: true, userId: true, content: true, visibility: true, groupId: true },
   });
@@ -232,7 +232,7 @@ router.patch("/posts/:postId", auth, async (req, res) => {
   }
 
   try {
-    const updatedPost = await prisma.posts.update({
+    const updatedPost = await prisma.post.update({
       where: { id: postId },
       data: updateData,
       select: { 
@@ -267,7 +267,7 @@ router.delete("/posts/:postId", auth, async (req, res) => {
 
   try {
     // Check if post exists and get its details
-    const existingPost = await prisma.posts.findUnique({
+    const existingPost = await prisma.post.findUnique({
       where: { id: postId },
       select: { 
         id: true, 
@@ -290,7 +290,7 @@ router.delete("/posts/:postId", auth, async (req, res) => {
     }
     // If the post is in a group, check if user is the group admin
     else if (existingPost.groupId) {
-      const group = await prisma.groups.findUnique({
+      const group = await prisma.group.findUnique({
         where: { id: existingPost.groupId },
         select: { adminId: true },
       });
@@ -305,7 +305,7 @@ router.delete("/posts/:postId", auth, async (req, res) => {
     }
 
     // Delete the post
-    await prisma.posts.delete({
+    await prisma.post.delete({
       where: { id: postId },
     });
 

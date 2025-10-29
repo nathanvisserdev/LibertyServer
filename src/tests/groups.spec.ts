@@ -40,7 +40,7 @@ async function createUserAndGetToken(isPaid?: boolean, email?: string, password?
   
   // If isPaid is true, update the user to be paid
   if (isPaid) {
-    await prisma.users.update({
+    await prisma.user.update({
       where: { id: signupRes.body.id },
       data: { isPaid: true }
     });
@@ -61,7 +61,7 @@ async function createUserAndGetToken(isPaid?: boolean, email?: string, password?
 
 // Helper function to create a connection with adjacency table entries
 async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING") {
-  const connection = await prisma.connections.create({
+  const connection = await prisma.connection.create({
     data: {
       requesterId,
       requestedId,
@@ -122,7 +122,7 @@ describe("groups endpoints", () => {
       }
     });
     
-    await prisma.posts.deleteMany({
+    await prisma.post.deleteMany({
       where: {
         user: { email: { contains: testNamespace } }
       }
@@ -141,14 +141,14 @@ describe("groups endpoints", () => {
     });
     
     // 2. Delete groups (after child records are gone)
-    await prisma.groups.deleteMany({
+    await prisma.group.deleteMany({
       where: {
         admin: { email: { contains: testNamespace } }
       }
     });
     
     // 3. Finally delete test users (after groups are gone)
-    await prisma.users.deleteMany({
+    await prisma.user.deleteMany({
       where: {
         email: { contains: testNamespace }
       }
@@ -592,7 +592,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create hidden group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Hidden Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -613,7 +613,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create PERSONAL group owned by the same user
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Personal Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
@@ -634,7 +634,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create PERSONAL group owned by admin
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Someone's Personal Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
@@ -655,7 +655,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -684,7 +684,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -714,7 +714,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -744,7 +744,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create PUBLIC group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Public Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -781,7 +781,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create PRIVATE group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Private Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -836,7 +836,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create PERSONAL group owned by admin
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Personal Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
@@ -861,7 +861,7 @@ describe("groups endpoints", () => {
       const member = await createUserAndGetToken(false);
 
       // Create PERSONAL group owned by admin
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Personal Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PERSONAL",
@@ -905,7 +905,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -938,7 +938,7 @@ describe("groups endpoints", () => {
       const user = await createUserAndGetToken(false);
 
       // Create hidden group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Hidden Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -962,7 +962,7 @@ describe("groups endpoints", () => {
       const nonMember = await createUserAndGetToken(false);
 
       // Create group with hidden membership
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1006,7 +1006,7 @@ describe("groups endpoints", () => {
       const nonMember = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1073,7 +1073,7 @@ describe("groups endpoints", () => {
       const nonMember = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1116,7 +1116,7 @@ describe("groups endpoints", () => {
       const nonMember = await createUserAndGetToken(false);
 
       // Create group with no members
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Empty Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1141,7 +1141,7 @@ describe("groups endpoints", () => {
       const otherMember = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -1180,7 +1180,7 @@ describe("groups endpoints", () => {
       const bannedMember = await createUserAndGetToken(false);
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1242,7 +1242,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connection between user1 and user2
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1251,7 +1251,7 @@ describe("groups endpoints", () => {
       });
 
       // Create a group but don't add user2 as member
-      await prisma.groups.create({
+      await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1273,7 +1273,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(true); // Paid user for hidden groups
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1282,7 +1282,7 @@ describe("groups endpoints", () => {
       });
 
       // Create hidden group
-      const hiddenGroup = await prisma.groups.create({
+      const hiddenGroup = await prisma.group.create({
         data: {
           name: "Hidden Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -1313,7 +1313,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1322,7 +1322,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group with hidden membership
-      const membershipHiddenGroup = await prisma.groups.create({
+      const membershipHiddenGroup = await prisma.group.create({
         data: {
           name: "Membership Hidden Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -1353,7 +1353,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1362,7 +1362,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1401,13 +1401,13 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Make user2 hidden
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: user2.userId },
         data: { isHidden: true }
       });
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1416,7 +1416,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1446,13 +1446,13 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Ban user2
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: user2.userId },
         data: { isBanned: true }
       });
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1461,7 +1461,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1491,7 +1491,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1500,7 +1500,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1531,7 +1531,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(false);
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1540,7 +1540,7 @@ describe("groups endpoints", () => {
       });
 
       // User1 blocks user2
-      await prisma.blocks.create({
+      await prisma.block.create({
         data: {
           blockerId: user1.userId,
           blockedId: user2.userId
@@ -1548,7 +1548,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1583,7 +1583,7 @@ describe("groups endpoints", () => {
       await createConnection(user1.userId, user3.userId, "IS_FOLLOWING");
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           description: "A test group",
@@ -1657,7 +1657,7 @@ describe("groups endpoints", () => {
       await createConnection(user1.userId, user4.userId, "IS_FOLLOWING");
 
       // Create group with 3 total members (2 connections + 1 other)
-      const largerGroup = await prisma.groups.create({
+      const largerGroup = await prisma.group.create({
         data: {
           name: "Larger Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1666,7 +1666,7 @@ describe("groups endpoints", () => {
       });
 
       // Create group with 1 total member (1 connection)
-      const smallerGroup = await prisma.groups.create({
+      const smallerGroup = await prisma.group.create({
         data: {
           name: "Smaller Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1727,7 +1727,7 @@ describe("groups endpoints", () => {
       await createConnection(user2.userId, user1.userId, "ACQUAINTANCE");
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1766,7 +1766,7 @@ describe("groups endpoints", () => {
       await createConnection(user1.userId, user4.userId, "IS_FOLLOWING");
 
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Multi Connection Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1816,7 +1816,7 @@ describe("groups endpoints", () => {
       const admin = await createUserAndGetToken(true);
 
       // Create connection
-      await prisma.connections.create({
+      await prisma.connection.create({
         data: {
           requesterId: user1.userId,
           requestedId: user2.userId,
@@ -1827,7 +1827,7 @@ describe("groups endpoints", () => {
       // Create multiple groups that should all be filtered out
       
       // Hidden group
-      const hiddenGroup = await prisma.groups.create({
+      const hiddenGroup = await prisma.group.create({
         data: {
           name: "Hidden Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -1837,7 +1837,7 @@ describe("groups endpoints", () => {
       });
 
       // Membership hidden group
-      const membershipHiddenGroup = await prisma.groups.create({
+      const membershipHiddenGroup = await prisma.group.create({
         data: {
           name: "Membership Hidden Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PRIVATE",
@@ -1893,7 +1893,7 @@ describe("groups endpoints", () => {
       const { token: adminToken, userId: adminId } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1914,7 +1914,7 @@ describe("groups endpoints", () => {
       const { token: adminToken, userId: adminId } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1944,7 +1944,7 @@ describe("groups endpoints", () => {
       const { token: adminToken, userId: adminId } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -1991,7 +1991,7 @@ describe("groups endpoints", () => {
       const { token: adminToken, userId: adminId } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -2030,7 +2030,7 @@ describe("groups endpoints", () => {
       const { userId: requesterId } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -2099,7 +2099,7 @@ describe("groups endpoints", () => {
       const { token: adminToken, userId: adminId } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -2149,7 +2149,7 @@ describe("groups endpoints", () => {
       const { userId: requester3Id } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -2225,7 +2225,7 @@ describe("groups endpoints", () => {
       const { userId: requester2Id } = await createUserAndGetToken(false);
 
       // Create a group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: "Test Group",
           groupType: "AUTOCRATIC", groupPrivacy: "PUBLIC",
@@ -2299,7 +2299,7 @@ describe("groups endpoints", () => {
       const { userId: adminId, token: adminToken } = await createUserAndGetToken(true);
       
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
@@ -2352,7 +2352,7 @@ describe("groups endpoints", () => {
       const { userId: moderatorId, token: moderatorToken } = await createUserAndGetToken(true);
       
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
@@ -2436,7 +2436,7 @@ describe("groups endpoints", () => {
       const { userId: adminId } = await createUserAndGetToken(true);
       
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
@@ -2476,7 +2476,7 @@ describe("groups endpoints", () => {
       const { userId: bannedId, token: bannedToken } = await createUserAndGetToken(true);
       
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
@@ -2522,7 +2522,7 @@ describe("groups endpoints", () => {
       const { userId: memberId, token: memberToken } = await createUserAndGetToken(true);
       
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",
@@ -2585,7 +2585,7 @@ describe("groups endpoints", () => {
       const { userId: expelledId, token: expelledToken } = await createUserAndGetToken(true);
       
       // Create group
-      const group = await prisma.groups.create({
+      const group = await prisma.group.create({
         data: {
           name: generateUniqueString("Test Group", testNamespace),
           description: "Test group for join request acceptance",

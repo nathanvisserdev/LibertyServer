@@ -43,7 +43,7 @@ router.post("/availability", async (req, res) => {
     if (hasUsername) {
       // Lowercase username for consistency
       const usernameStr = String(username).toLowerCase().trim();
-      existingUser = await prisma.users.findUnique({
+      existingUser = await prisma.user.findUnique({
         where: { username: usernameStr },
         select: { id: true }
       });
@@ -58,7 +58,7 @@ router.post("/availability", async (req, res) => {
         });
       }
       
-      existingUser = await prisma.users.findUnique({
+      existingUser = await prisma.user.findUnique({
         where: { email: emailStr },
         select: { id: true }
       });
@@ -196,7 +196,7 @@ router.post("/signup", async (req, res) => {
       userData.about = String(about).trim();
     }
 
-    const result = await prisma.users.create({
+    const result = await prisma.user.create({
       data: userData,
       select: {
         id: true,

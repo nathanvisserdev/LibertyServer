@@ -15,7 +15,7 @@ router.get("/groups", auth, async (req, res) => {
 
   try {
     // Get all groups with admin and membership information
-    const groups = await prisma.groups.findMany({ 
+    const groups = await prisma.group.findMany({ 
       include: { 
         admin: {
           select: {
@@ -124,7 +124,7 @@ router.get("/groups/mutuals", auth, async (req, res) => {
     }
 
     // Fetch user details for validation
-    const connectedUsers = await prisma.users.findMany({
+    const connectedUsers = await prisma.user.findMany({
       where: {
         id: { in: connectionUserIds }
       },
@@ -139,7 +139,7 @@ router.get("/groups/mutuals", auth, async (req, res) => {
     });
 
     // Get blocks to filter out blocked users
-    const blocks = await prisma.blocks.findMany({
+    const blocks = await prisma.block.findMany({
       where: {
         OR: [
           { blockerId: userId },
@@ -175,7 +175,7 @@ router.get("/groups/mutuals", auth, async (req, res) => {
     const bannedGroupIds = new Set(userBannedGroups.map(roster => roster.groupId));
 
     // Find groups that have valid connections as members
-    const groupsWithMembers = await prisma.groups.findMany({
+    const groupsWithMembers = await prisma.group.findMany({
       where: {
         AND: [
           { isHidden: false },
@@ -268,7 +268,7 @@ router.get("/groups/:groupId", auth, async (req, res) => {
 
   try {
     // Fetch group with admin and member details
-    const group = await prisma.groups.findUnique({
+    const group = await prisma.group.findUnique({
       where: { id: groupId },
       include: {
         admin: {
@@ -434,7 +434,7 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
 
   try {
     // Fetch group
-    const group = await prisma.groups.findUnique({
+    const group = await prisma.group.findUnique({
       where: { id: groupId },
       select: {
         id: true,
@@ -578,7 +578,7 @@ router.post("/groups/:id/join", auth, async (req, res) => {
 
   try {
     // Check if group exists
-    const group = await prisma.groups.findUnique({
+    const group = await prisma.group.findUnique({
       where: { id: groupId },
       select: {
         id: true,
@@ -714,7 +714,7 @@ router.post("/groups", auth, async (req, res) => {
 
   try {
     // Get user's payment status to check if they can set isHidden
-    const user = await prisma.users.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: me.id },
       select: { isPaid: true }
     });
@@ -744,7 +744,7 @@ router.post("/groups", auth, async (req, res) => {
       adminId: me.id,
     };
 
-    const group = await prisma.groups.create({
+    const group = await prisma.group.create({
       data: groupData,
       select: {
         id: true,
@@ -801,7 +801,7 @@ router.get("/groups/:id/room", auth, async (req, res) => {
   }
   const me = (req.user as any).id;
   if (!req.params.id) return res.status(400).send("Missing group id");
-  const g = await prisma.groups.findUnique({ where: { id: req.params.id as string } });
+  const g = await prisma.group.findUnique({ where: { id: req.params.id as string } });
   if (!g) return res.sendStatus(404);
 
   if (g.groupPrivacy === "PERSONAL") return res.status(404).send("no room for social circle");
@@ -835,7 +835,7 @@ router.get("/groups/:groupId/join-requests/pending", auth, async (req, res) => {
 
   try {
     // Check if the group exists and get the admin ID
-    const group = await prisma.groups.findUnique({
+    const group = await prisma.group.findUnique({
       where: {
         id: groupId
       },
@@ -1056,7 +1056,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     const connectionUserIds = userConnections.map((conn: any) => conn.otherUserId);
 
     // Fetch user details for validation
-    const connectedUsers = await prisma.users.findMany({
+    const connectedUsers = await prisma.user.findMany({
       where: {
         id: { in: connectionUserIds }
       },
@@ -1071,7 +1071,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     });
 
     // Get blocks to filter out blocked users
-    const blocks = await prisma.blocks.findMany({
+    const blocks = await prisma.block.findMany({
       where: {
         OR: [
           { blockerId: requesterId },
@@ -1117,7 +1117,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
     });
 
     // Get all groups where the target user is the admin
-    const adminGroups = await prisma.groups.findMany({
+    const adminGroups = await prisma.group.findMany({
       where: {
         adminId: targetUserId
       },
@@ -1138,7 +1138,7 @@ router.get("/users/:userId/groups", auth, async (req, res) => {
 
     // Get groups where requester's mutual connections are admins
     const mutualAdminGroups = validConnectionUserIds.length > 0 
-      ? await prisma.groups.findMany({
+      ? await prisma.group.findMany({
           where: {
             adminId: { in: validConnectionUserIds },
             isHidden: false,

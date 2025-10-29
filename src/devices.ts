@@ -96,7 +96,7 @@ router.get("/devices/pending-count", auth, async (req, res) => {
   const userId = (req.user as any).id;
 
   try {
-    const user = await prisma.users.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { pendingRequestCount: true },
     });

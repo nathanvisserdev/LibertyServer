@@ -21,7 +21,7 @@ export async function auth(req: Request, res: Response, next: NextFunction) {
     const payload = jwt.verify(token, JWT_SECRET);
     if (typeof payload === "object" && payload !== null && payload.id) {
       // Check if user has been banned since token was issued
-      const user = await prisma.users.findUnique({
+      const user = await prisma.user.findUnique({
         where: { id: payload.id },
         select: { isBanned: true }
       });

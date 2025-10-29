@@ -13,7 +13,7 @@ router.post("/block", auth, async (req, res) => {
   const me = (req.user as any).id;
   const { userId } = req.body ?? {};
   if (!userId || userId === me) return res.status(400).send("invalid target");
-  await prisma.blocks.upsert({
+  await prisma.block.upsert({
     where: { blockerId_blockedId: { blockerId: me, blockedId: userId } },
     update: {},
     create: { blockerId: me, blockedId: userId },
@@ -29,7 +29,7 @@ router.post("/unblock", auth, async (req, res) => {
   const me = (req.user as any).id;
   const { userId } = req.body ?? {};
   if (!userId || userId === me) return res.status(400).send("invalid target");
-  await prisma.blocks.deleteMany({ where: { blockerId: me, blockedId: userId } });
+  await prisma.block.deleteMany({ where: { blockerId: me, blockedId: userId } });
   res.sendStatus(204);
 });
 

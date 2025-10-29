@@ -48,7 +48,7 @@ async function createUserAndGetToken(email?: string, password?: string, username
 
 // Helper function to create a connection between two users
 async function createConnection(requesterId: string, requestedId: string, type: "ACQUAINTANCE" | "STRANGER" | "IS_FOLLOWING") {
-  const connection = await prisma.connections.create({
+  const connection = await prisma.connection.create({
     data: {
       requesterId,
       requestedId,
@@ -92,7 +92,7 @@ async function createConnection(requesterId: string, requestedId: string, type: 
 
 // Helper function to create a block between two users
 async function createBlock(blockerId: string, blockedId: string) {
-  await prisma.blocks.create({
+  await prisma.block.create({
     data: {
       blockerId,
       blockedId,
@@ -104,7 +104,7 @@ describe("profile endpoints", () => {
   // Clean up test data after all tests complete
   afterAll(async () => {
     // Only delete test users created by this test file
-    await prisma.users.deleteMany({
+    await prisma.user.deleteMany({
       where: {
         email: {
           contains: testNamespace
@@ -142,7 +142,7 @@ describe("profile endpoints", () => {
       const { userId: bannedUserId } = await createUserAndGetToken();
       
       // Ban the target user
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: bannedUserId },
         data: { isBanned: true },
       });
@@ -160,7 +160,7 @@ describe("profile endpoints", () => {
       const { userId: hiddenUserId } = await createUserAndGetToken();
       
       // Hide the target user
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: hiddenUserId },
         data: { isHidden: true },
       });
@@ -208,7 +208,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });
@@ -237,7 +237,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });
@@ -261,7 +261,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });
@@ -285,7 +285,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make sure target user is not private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: false },
       });
@@ -311,7 +311,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });
@@ -338,7 +338,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });
@@ -482,7 +482,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });
@@ -515,7 +515,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user NOT private (so we get extended profile)
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: false },
       });
@@ -552,7 +552,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Update target user to have null about (profilePhoto is required so can't be null)
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { 
           about: null,
@@ -594,7 +594,7 @@ describe("profile endpoints", () => {
       const targetUserId = signupRes.body.id;
       
       // Make user not private so we can view their profile
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: false },
       });
@@ -613,7 +613,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user not private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: false },
       });
@@ -648,7 +648,7 @@ describe("profile endpoints", () => {
       const { userId: targetUserId } = await createUserAndGetToken();
       
       // Make target user private
-      await prisma.users.update({
+      await prisma.user.update({
         where: { id: targetUserId },
         data: { isPrivate: true },
       });

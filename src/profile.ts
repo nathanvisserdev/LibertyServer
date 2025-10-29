@@ -18,7 +18,7 @@ router.get("/users/:id", auth, async (req, res) => {
 
   try {
     // Get the target user with basic info
-    const targetUser = await prisma.users.findUnique({
+    const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
       select: {
         id: true,
@@ -44,7 +44,7 @@ router.get("/users/:id", auth, async (req, res) => {
     }
 
     // Check if the session user has blocked the target user or vice versa
-    const blockExists = await prisma.blocks.findFirst({
+    const blockExists = await prisma.block.findFirst({
       where: {
         OR: [
           { blockerId: sessionUserId, blockedId: targetUserId },
@@ -111,7 +111,7 @@ router.get("/users/:id", auth, async (req, res) => {
     // Build response based on privacy and connection status
     if (isConnected || !targetUser.isPrivate) {
       // Connected or target is not private - show extended profile with posts
-      const posts = await prisma.posts.findMany({
+      const posts = await prisma.post.findMany({
         where: {
           userId: targetUserId,
           visibility: { in: ["PUBLIC", "GROUP"] }
@@ -190,7 +190,7 @@ router.get("/users/:id/followers", auth, async (req, res) => {
 
   try {
     // Check if target user exists and is not banned/hidden
-    const targetUser = await prisma.users.findUnique({
+    const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, isBanned: true, isHidden: true }
     });
@@ -225,7 +225,7 @@ router.get("/users/:id/followers", auth, async (req, res) => {
     });
 
     // Filter out banned/hidden users and check if session user has blocked them
-    const blocks = await prisma.blocks.findMany({
+    const blocks = await prisma.block.findMany({
       where: {
         OR: [
           { blockerId: sessionUserId },
@@ -276,7 +276,7 @@ router.get("/users/:id/following", auth, async (req, res) => {
 
   try {
     // Check if target user exists and is not banned/hidden
-    const targetUser = await prisma.users.findUnique({
+    const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, isBanned: true, isHidden: true }
     });
@@ -308,7 +308,7 @@ router.get("/users/:id/following", auth, async (req, res) => {
       return res.status(200).json([]);
     }
 
-    const users = await prisma.users.findMany({
+    const users = await prisma.user.findMany({
       where: {
         id: { in: followedUserIds }
       },
@@ -324,7 +324,7 @@ router.get("/users/:id/following", auth, async (req, res) => {
     });
 
     // Filter out banned/hidden users and check if session user has blocked them
-    const blocks = await prisma.blocks.findMany({
+    const blocks = await prisma.block.findMany({
       where: {
         OR: [
           { blockerId: sessionUserId },
