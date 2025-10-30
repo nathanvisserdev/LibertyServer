@@ -155,7 +155,7 @@ router.get("/me/subnets/:subnetId/eligible-connections", auth, async (req, res) 
   }
 });
 
-// --- Add Member to SubNet ---
+// --- Add Member(s) to SubNet ---
 router.post("/subnets/:id/members", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
@@ -163,11 +163,31 @@ router.post("/subnets/:id/members", auth, async (req, res) => {
   
   const ownerId = (req.user as any).id;
   const { id: subNetId } = req.params;
-  const { userId, role } = req.body;
+  const { userId, userIds, role } = req.body;
 
-  // Validate required fields
-  if (!userId || typeof userId !== "string") {
-    return res.status(400).json({ error: "userId is required" });
+  // Support both single userId and batch userIds
+  let userIdsToAdd: string[] = [];
+  
+  if (userIds && Array.isArray(userIds)) {
+    // Batch mode
+    userIdsToAdd = userIds;
+  } else if (userId && typeof userId === "string") {
+    // Single mode
+    userIdsToAdd = [userId];
+  } else {
+    return res.status(400).json({ error: "Either userId or userIds is required" });
+  }
+
+  // Validate all userIds are strings
+  if (!userIdsToAdd.every((id: any) => typeof id === "string")) {
+    return res.status(400).json({ error: "All user IDs must be strings" });
+  }
+
+  // Remove duplicates
+  userIdsToAdd = [...new Set(userIdsToAdd)];
+
+  if (userIdsToAdd.length === 0) {
+    return res.status(400).json({ error: "At least one userId is required" });
   }
 
   // Validate role if provided
@@ -198,43 +218,47 @@ router.post("/subnets/:id/members", auth, async (req, res) => {
       return res.status(403).json({ error: "You do not have permission to manage this subnet" });
     }
 
-    // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, username: true, firstName: true, lastName: true }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    // Cannot add yourself as a member (you're already the owner)
-    if (userId === ownerId) {
+    // Check if any user is the owner
+    if (userIdsToAdd.includes(ownerId)) {
       return res.status(400).json({ error: "Cannot add yourself as a member (you are the owner)" });
     }
 
-    // Check if member already exists
-    const existingMember = await prisma.subNetMember.findUnique({
-      where: {
-        subNetId_userId: {
-          subNetId,
-          userId
-        }
-      }
+    // Check if users exist
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIdsToAdd } },
+      select: { id: true, username: true, firstName: true, lastName: true }
     });
 
-    if (existingMember) {
-      return res.status(400).json({ error: "User is already a member of this subnet" });
+    if (users.length !== userIdsToAdd.length) {
+      const foundIds = users.map((u: any) => u.id);
+      const missingIds = userIdsToAdd.filter((id: string) => !foundIds.includes(id));
+      return res.status(404).json({ 
+        error: "One or more users not found",
+        missingUserIds: missingIds
+      });
     }
 
-    // Find the connection between owner and the user to be added
-    // SubNetMember requires a valid connectionId
-    // For mutual connections (ACQUAINTANCE, STRANGER): requesterId=min(userId), requestedId=max(userId)
-    // For follows (IS_FOLLOWING): requesterId=followerId, requestedId=userId
-    
+    // Check for existing members
+    const existingMembers = await prisma.subNetMember.findMany({
+      where: {
+        subNetId,
+        userId: { in: userIdsToAdd }
+      },
+      select: { userId: true }
+    });
+
+    if (existingMembers.length > 0) {
+      const existingUserIds = existingMembers.map((m: any) => m.userId);
+      return res.status(409).json({ 
+        error: "One or more users are already members of this subnet",
+        existingUserIds: existingUserIds
+      });
+    }
+
+    // Find connections for all users
     const connections = await prisma.connection.findMany({
       where: {
-        OR: [
+        OR: userIdsToAdd.flatMap((userId: string) => [
           // Mutual connections where owner is requester
           {
             requesterId: ownerId,
@@ -259,61 +283,81 @@ router.post("/subnets/:id/members", auth, async (req, res) => {
             requestedId: userId,
             type: "IS_FOLLOWING"
           }
-        ]
+        ])
       }
     });
 
-    if (connections.length === 0) {
+    // Create a map of userId to connectionId
+    const connectionMap = new Map<string, string>();
+    userIdsToAdd.forEach((userId: string) => {
+      const userConnections = connections.filter((c: any) => 
+        (c.requesterId === ownerId && c.requestedId === userId) ||
+        (c.requesterId === userId && c.requestedId === ownerId)
+      );
+      
+      if (userConnections.length > 0) {
+        // Prefer mutual connections over follows
+        const connection = userConnections.find((c: any) => c.type !== "IS_FOLLOWING") || userConnections[0];
+        connectionMap.set(userId, connection.id);
+      }
+    });
+
+    // Check if all users have connections
+    const usersWithoutConnection = userIdsToAdd.filter((id: string) => !connectionMap.has(id));
+    if (usersWithoutConnection.length > 0) {
       return res.status(400).json({ 
-        error: "Cannot add user to subnet. User must be connected to you (acquaintance, stranger, or follower)" 
+        error: "Cannot add users to subnet. All users must be connected to you (acquaintance, stranger, or follower)",
+        usersWithoutConnection
       });
     }
 
-    // Use the first connection found (prefer mutual connections over follows)
-    const connection = connections.find((c: any) => c.type !== "IS_FOLLOWING") || connections[0];
-
-    // Create the subnet member
-    const member = await prisma.$transaction(async (tx: any) => {
-      const newMember = await tx.subNetMember.create({
-        data: {
-          subNetId,
-          userId,
-          connectionId: connection.id,
-          role: role || "VIEWER"
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true
+    // Create the subnet members
+    const members = await prisma.$transaction(async (tx: any) => {
+      const newMembers = await Promise.all(
+        userIdsToAdd.map((userId: string) =>
+          tx.subNetMember.create({
+            data: {
+              subNetId,
+              userId,
+              connectionId: connectionMap.get(userId)!,
+              role: role || "VIEWER"
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true
+                }
+              },
+              subNet: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true
+                }
+              }
             }
-          },
-          subNet: {
-            select: {
-              id: true,
-              name: true,
-              slug: true
-            }
-          }
-        }
-      });
+          })
+        )
+      );
 
-      // Increment memberCount
+      // Increment memberCount by the number of members added
       await tx.subNet.update({
         where: { id: subNetId },
         data: {
-          memberCount: { increment: 1 }
+          memberCount: { increment: userIdsToAdd.length }
         }
       });
 
-      return newMember;
+      return newMembers;
     });
 
-    res.status(201).json(member);
+    // Return single member for single add, array for batch add
+    res.status(201).json(userIds ? members : members[0]);
   } catch (error) {
-    console.error("Error adding subnet member:", error);
+    console.error("Error adding subnet member(s):", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
