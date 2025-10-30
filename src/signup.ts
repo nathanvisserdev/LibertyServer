@@ -222,7 +222,7 @@ router.post("/signup", async (req, res) => {
         data: {
           name: "Social Circle",
           slug: "social-circle",
-          description: "Your default social circle",
+          description: "1. Add your chill friends 2. Post just to them",
           visibility: "PRIVATE",
           isDefault: true,
           ownerId: newUser.id,

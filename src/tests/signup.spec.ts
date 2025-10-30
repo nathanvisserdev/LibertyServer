@@ -89,7 +89,7 @@ describe("POST /signup", () => {
     expect(subnet).not.toBeNull();
     expect(subnet?.name).toBe("Social Circle");
     expect(subnet?.slug).toBe("social-circle");
-    expect(subnet?.description).toBe("Your default social circle");
+    expect(subnet?.description).toBe("1. Add your chill friends 2. Post just to them");
     expect(subnet?.visibility).toBe("PRIVATE");
     expect(subnet?.isDefault).toBe(true);
     expect(subnet?.ordering).toBe(0);

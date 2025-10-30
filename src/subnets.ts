@@ -41,7 +41,7 @@ async function ensureUniqueSlug(ownerId: string, baseSlug: string, excludeId?: s
   }
 }
 
-// --- Create SubNetwork ---
+// --- Create SubNet ---
 router.post("/subnets", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
@@ -128,7 +128,7 @@ router.post("/subnets", auth, async (req, res) => {
   }
 });
 
-// --- List SubNetworks ---
+// --- List SubNets ---
 router.get("/subnets", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
@@ -180,7 +180,7 @@ router.get("/subnets", auth, async (req, res) => {
   }
 });
 
-// --- Get Single SubNetwork ---
+// --- Get Single SubNet ---
 router.get("/subnets/:id", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
@@ -252,7 +252,7 @@ router.get("/subnets/:id", auth, async (req, res) => {
   }
 });
 
-// --- Update SubNetwork ---
+// --- Update SubNet ---
 router.patch("/subnets/:id", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
@@ -379,7 +379,7 @@ router.patch("/subnets/:id", auth, async (req, res) => {
   }
 });
 
-// --- Delete SubNetwork ---
+// --- Delete SubNet ---
 router.delete("/subnets/:id", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");

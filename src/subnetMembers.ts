@@ -5,7 +5,7 @@ import { prismaClient as prisma } from "./prismaClient.js";
 
 const router = Router();
 
-// --- Add Member to SubNetwork ---
+// --- Add Member to SubNet ---
 router.post("/subnets/:id/members", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
@@ -168,7 +168,7 @@ router.post("/subnets/:id/members", auth, async (req, res) => {
   }
 });
 
-// --- Remove Member from SubNetwork ---
+// --- Remove Member from SubNet ---
 router.delete("/subnets/:id/members/:userId", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
