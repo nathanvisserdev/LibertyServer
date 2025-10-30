@@ -57,6 +57,104 @@ router.get("/me/subnets/:subnetId/members", auth, async (req, res) => {
   }
 });
 
+// --- Get Eligible Connections for SubNet ---
+router.get("/me/subnets/:subnetId/eligible-connections", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  
+  const userId = (req.user as any).id;
+  const { subnetId } = req.params;
+
+  try {
+    // Check if subnet exists and belongs to the authenticated user
+    const subnet = await prisma.subNet.findUnique({
+      where: { id: subnetId },
+      select: { ownerId: true }
+    });
+
+    if (!subnet) {
+      return res.status(404).json({ error: "Subnet not found" });
+    }
+
+    if (subnet.ownerId !== userId) {
+      return res.status(403).json({ error: "You do not have permission to view this subnet" });
+    }
+
+    // Get all existing member user IDs for this subnet
+    const existingMembers = await prisma.subNetMember.findMany({
+      where: { subNetId: subnetId },
+      select: { userId: true }
+    });
+
+    const existingMemberIds = existingMembers.map((m: any) => m.userId);
+    // Also exclude the owner themselves
+    existingMemberIds.push(userId);
+
+    // Fetch user connections using adjacency table
+    const userConnections = await prisma.userConnection.findMany({
+      where: {
+        userId: userId,
+        otherUserId: { notIn: existingMemberIds }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            profilePhoto: true
+          }
+        }
+      },
+      orderBy: [
+        { createdAt: 'desc' },
+        { otherUserId: 'asc' }
+      ]
+    });
+
+    // Fetch the "other" users' data
+    const otherUserIds = userConnections.map((uc: any) => uc.otherUserId);
+    const otherUsers = await prisma.user.findMany({
+      where: {
+        id: { in: otherUserIds }
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        username: true,
+        profilePhoto: true
+      }
+    });
+
+    // Create a map for quick lookup
+    const otherUsersMap = new Map(otherUsers.map((u: any) => [u.id, u]));
+
+    // Build response
+    const eligibleConnections = userConnections.map((uc: any) => {
+      const otherUser = otherUsersMap.get(uc.otherUserId);
+      return {
+        id: uc.connectionId,
+        userId: uc.otherUserId,
+        firstName: (otherUser as any)?.firstName || '',
+        lastName: (otherUser as any)?.lastName || '',
+        username: (otherUser as any)?.username || '',
+        profilePhoto: (otherUser as any)?.profilePhoto || '',
+        type: uc.type,
+        createdAt: uc.createdAt
+      };
+    });
+
+    return res.status(200).json(eligibleConnections);
+
+  } catch (error) {
+    console.error("Error fetching eligible connections:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // --- Add Member to SubNet ---
 router.post("/subnets/:id/members", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
