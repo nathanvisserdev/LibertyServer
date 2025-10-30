@@ -5,6 +5,58 @@ import { prismaClient as prisma } from "./prismaClient.js";
 
 const router = Router();
 
+// --- Get Members of a SubNet ---
+router.get("/me/subnets/:subnetId/members", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  
+  const ownerId = (req.user as any).id;
+  const { subnetId } = req.params;
+
+  try {
+    // Check if subnet exists and belongs to the authenticated user
+    const subnet = await prisma.subNet.findUnique({
+      where: { id: subnetId },
+      select: { ownerId: true }
+    });
+
+    if (!subnet) {
+      return res.status(404).json({ error: "Subnet not found" });
+    }
+
+    if (subnet.ownerId !== ownerId) {
+      return res.status(403).json({ error: "You do not have permission to view this subnet's members" });
+    }
+
+    // Fetch all members of the subnet
+    const members = await prisma.subNetMember.findMany({
+      where: {
+        subNetId: subnetId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            profilePhoto: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    res.json(members);
+  } catch (error) {
+    console.error("Error fetching subnet members:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // --- Add Member to SubNet ---
 router.post("/subnets/:id/members", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
