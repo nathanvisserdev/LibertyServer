@@ -37,6 +37,7 @@ enum PostVisibility {
   PUBLIC
   CONNECTIONS
   ACQUAINTANCES
+  STRANGERS
   SUBNET
 }
 

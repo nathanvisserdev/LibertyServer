@@ -645,7 +645,7 @@ describe("posts endpoints", () => {
         .send({ visibility: "INVALID" });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
+      expect(res.text).toBe("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, STRANGERS, or SUBNET");
     });
 
     it("returns 400 bad request when trying to set GROUP visibility", async () => {
@@ -666,7 +666,7 @@ describe("posts endpoints", () => {
         .send({ visibility: "GROUP" });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
+      expect(res.text).toBe("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, STRANGERS, or SUBNET");
     });
 
     it("returns 400 bad requestwhen no valid fields to update", async () => {

@@ -41,6 +41,18 @@ async function canUserViewPost(userId: string, post: any): Promise<boolean> {
     return !!connection;
   }
 
+  // STRANGERS posts - user must be a stranger
+  if (post.visibility === "STRANGERS") {
+    const connection = await prisma.userConnection.findFirst({
+      where: {
+        userId: userId,
+        otherUserId: post.userId,
+        type: "STRANGER"
+      }
+    });
+    return !!connection;
+  }
+
   // SUBNET posts - user must be a member of the subnet or the subnet owner
   if (post.visibility === "SUBNET" && post.subNetId) {
     const subnet = await prisma.subNet.findUnique({
@@ -100,11 +112,11 @@ router.post("/posts", auth, async (req, res) => {
   if (meRow.isBanned) return res.status(403).send("account banned");
 
   // Validate visibility
-  const validVisibilities = ["PUBLIC", "CONNECTIONS", "ACQUAINTANCES", "SUBNET"];
+  const validVisibilities = ["PUBLIC", "CONNECTIONS", "ACQUAINTANCES", "STRANGERS", "SUBNET"];
   const postVisibility = visibility ? String(visibility).toUpperCase() : "PUBLIC";
   
   if (!validVisibilities.includes(postVisibility)) {
-    return res.status(400).send("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
+    return res.status(400).send("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, STRANGERS, or SUBNET");
   }
 
   try {
@@ -153,8 +165,8 @@ router.post("/posts", auth, async (req, res) => {
       }
     }
 
-    // Validate CONNECTIONS and ACQUAINTANCES visibility
-    if (postVisibility === "CONNECTIONS" || postVisibility === "ACQUAINTANCES") {
+    // Validate CONNECTIONS, ACQUAINTANCES, and STRANGERS visibility
+    if (postVisibility === "CONNECTIONS" || postVisibility === "ACQUAINTANCES" || postVisibility === "STRANGERS") {
       // No additional validation needed - these are network-wide visibility settings
       // The feed filter will handle who can see these posts
     }
@@ -250,7 +262,15 @@ router.get("/feed", auth, async (req, res) => {
           ]
         },
         
-        // 5. SUBNET posts from subnets user is a member of or owns
+        // 5. STRANGERS posts from strangers only
+        {
+          AND: [
+            { visibility: "STRANGERS" },
+            { userId: { in: Array.from(strangers) } }
+          ]
+        },
+        
+        // 6. SUBNET posts from subnets user is a member of or owns
         {
           AND: [
             { visibility: "SUBNET" },
@@ -397,9 +417,9 @@ router.patch("/posts/:postId", auth, async (req, res) => {
 
   // Validate and update visibility if provided
   if (visibility !== undefined) {
-    const validVisibilities = ["PUBLIC", "CONNECTIONS", "ACQUAINTANCES", "SUBNET"];
+    const validVisibilities = ["PUBLIC", "CONNECTIONS", "ACQUAINTANCES", "STRANGERS", "SUBNET"];
     if (!validVisibilities.includes(visibility)) {
-      return res.status(400).send("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
+      return res.status(400).send("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, STRANGERS, or SUBNET");
     }
     
     // If changing to SUBNET visibility, ensure post has a subNetId
