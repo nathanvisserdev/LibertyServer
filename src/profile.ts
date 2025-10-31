@@ -114,7 +114,7 @@ router.get("/users/:id", auth, async (req, res) => {
       const posts = await prisma.post.findMany({
         where: {
           userId: targetUserId,
-          visibility: { in: ["PUBLIC", "GROUP"] }
+          visibility: "PUBLIC"
         },
         orderBy: { createdAt: "desc" },
         select: {
@@ -124,7 +124,6 @@ router.get("/users/:id", auth, async (req, res) => {
           orientation: true,
           createdAt: true,
           visibility: true,
-          groupId: true,
           userId: true,
         }
       });

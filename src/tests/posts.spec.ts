@@ -150,7 +150,6 @@ describe("posts endpoints", () => {
       expect(res.body).toHaveProperty("content", content);
       expect(res.body).toHaveProperty("createdAt");
       expect(res.body).toHaveProperty("userId", userId);
-      expect(res.body).toHaveProperty("groupId", null);
       expect(res.body).toHaveProperty("visibility", "PUBLIC");
       
       // Verify the createdAt is a valid date string
@@ -211,7 +210,7 @@ describe("posts endpoints", () => {
       expect(res.body.content).toBe("12345");
     });
 
-    it("returns 404 not found when posting to non-existent group", async () => {
+    it("ignores groupId parameter since group posting is not supported", async () => {
       const { token } = await createUserAndGetToken();
       const nonExistentGroupId = "non-existent-group-id";
       
@@ -223,8 +222,9 @@ describe("posts endpoints", () => {
           groupId: nonExistentGroupId
         });
       
-      expect(res.status).toBe(404);
-      expect(res.text).toBe("Group not found");
+      // groupId is ignored, post is created as PUBLIC
+      expect(res.status).toBe(201);
+      expect(res.body.visibility).toBe("PUBLIC");
     });
 
     it("creates public post when no groupId provided", async () => {
@@ -238,7 +238,6 @@ describe("posts endpoints", () => {
       
       expect(res.status).toBe(201);
       expect(res.body.visibility).toBe("PUBLIC");
-      expect(res.body.groupId).toBe(null);
       expect(res.body.content).toBe(content);
     });
 
@@ -252,15 +251,17 @@ describe("posts endpoints", () => {
       expect(res.status).toBe(401);
     });
 
-    it("returns empty feed for new user with no connections", async () => {
-      const { token } = await createUserAndGetToken();
+    it("returns no own posts for new user", async () => {
+      const { token, userId } = await createUserAndGetToken();
       
       const res = await request(app)
         .get("/feed")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      // May contain PUBLIC posts from other users, but none from this user
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toEqual([]);
     });
 
     it("returns user's own posts in feed", async () => {
@@ -279,21 +280,23 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(1);
-      expect(res.body[0]).toHaveProperty("content", postContent);
-      expect(res.body[0]).toHaveProperty("userId", userId);
-      expect(res.body[0]).toHaveProperty("relation", "SELF");
-      expect(res.body[0]).toHaveProperty("user");
-      expect(res.body[0].user).toHaveProperty("id", userId);
-      expect(res.body[0].user).toHaveProperty("username");
-      expect(res.body[0].user).toHaveProperty("firstName");
-      expect(res.body[0].user).toHaveProperty("lastName");
-      expect(res.body[0].user).not.toHaveProperty("email");
-      expect(res.body[0].user).not.toHaveProperty("password");
+      // Filter to user's own posts
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(1);
+      expect(userPosts[0]).toHaveProperty("content", postContent);
+      expect(userPosts[0]).toHaveProperty("userId", userId);
+      expect(userPosts[0]).toHaveProperty("relation", "SELF");
+      expect(userPosts[0]).toHaveProperty("user");
+      expect(userPosts[0].user).toHaveProperty("id", userId);
+      expect(userPosts[0].user).toHaveProperty("username");
+      expect(userPosts[0].user).toHaveProperty("firstName");
+      expect(userPosts[0].user).toHaveProperty("lastName");
+      expect(userPosts[0].user).not.toHaveProperty("email");
+      expect(userPosts[0].user).not.toHaveProperty("password");
     });
 
     it("orders posts by creation date (newest first)", async () => {
-      const { token } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       // Create multiple posts
       const post1Content = "First post";
@@ -326,15 +329,17 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(3);
+      // Filter to user's own posts
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(3);
       
       // Should be ordered newest first
-      expect(res.body[0].content).toBe(post3Content);
-      expect(res.body[1].content).toBe(post2Content);
-      expect(res.body[2].content).toBe(post1Content);
+      expect(userPosts[0].content).toBe(post3Content);
+      expect(userPosts[1].content).toBe(post2Content);
+      expect(userPosts[2].content).toBe(post1Content);
       
       // Verify timestamps are in descending order
-      const timestamps = res.body.map((post: any) => new Date(post.createdAt).getTime());
+      const timestamps = userPosts.map((post: any) => new Date(post.createdAt).getTime());
       for (let i = 0; i < timestamps.length - 1; i++) {
         expect(timestamps[i]).toBeGreaterThanOrEqual(timestamps[i + 1]);
       }
@@ -355,9 +360,11 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(1);
+      // Filter to user's own post
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(1);
       
-      const post = res.body[0];
+      const post = userPosts[0];
       expect(post).toHaveProperty("id");
       expect(post).toHaveProperty("userId");
       expect(post).toHaveProperty("content");
@@ -409,7 +416,7 @@ describe("posts endpoints", () => {
     it("returns posts from multiple users when connections exist", async () => {
       // This test would require setting up connections between users
       // For now, we'll test with just the current user's posts
-      const { token } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       // Create multiple posts
       await request(app)
@@ -427,27 +434,32 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(2);
       
-      // All posts should have relation "SELF" for the current user
-      res.body.forEach((post: any) => {
+      // Filter to only this user's posts (feed includes PUBLIC posts from all users)
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(2);
+      
+      // All of the user's own posts should have relation "SELF"
+      userPosts.forEach((post: any) => {
         expect(post.relation).toBe("SELF");
       });
     });
 
-    it("handles feed request with no posts", async () => {
-      const { token } = await createUserAndGetToken();
+    it("handles feed request with no posts from self", async () => {
+      const { token, userId } = await createUserAndGetToken();
       
       const res = await request(app)
         .get("/feed")
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      // Feed may contain PUBLIC posts from other users, but none from this user
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toEqual([]);
     });
 
     it("validates date format in feed response", async () => {
-      const { token } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       await request(app)
         .post("/posts")
@@ -459,16 +471,18 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(1);
+      // Filter to only the user's own post
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(1);
       
-      const createdAt = res.body[0].createdAt;
+      const createdAt = userPosts[0].createdAt;
       expect(typeof createdAt).toBe("string");
       expect(new Date(createdAt)).toBeInstanceOf(Date);
       expect(isNaN(new Date(createdAt).getTime())).toBe(false);
     });
 
     it("correctly maps relation types", async () => {
-      const { token } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       // Create a post
       await request(app)
@@ -481,8 +495,10 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(1);
-      expect(res.body[0].relation).toBe("SELF");
+      // Filter to only the user's own post
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(1);
+      expect(userPosts[0].relation).toBe("SELF");
     });
 
     it("includes user information in feed posts", async () => {
@@ -498,9 +514,11 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(1);
+      // Filter to only the user's own post
+      const userPosts = res.body.filter((post: any) => post.userId === userId);
+      expect(userPosts).toHaveLength(1);
       
-      const post = res.body[0];
+      const post = userPosts[0];
       expect(post.user.id).toBe(userId);
       expect(post.user).toHaveProperty("username");
       expect(post.user).toHaveProperty("firstName");
@@ -627,10 +645,10 @@ describe("posts endpoints", () => {
         .send({ visibility: "INVALID" });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Invalid visibility. Must be PUBLIC or GROUP");
+      expect(res.text).toBe("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
     });
 
-    it("returns 400 bad request when trying to set GROUP visibility on non-group post", async () => {
+    it("returns 400 bad request when trying to set GROUP visibility", async () => {
       const { token } = await createUserAndGetToken();
       
       // Create a public post (no groupId)
@@ -641,14 +659,14 @@ describe("posts endpoints", () => {
       
       const postId = createRes.body.id;
       
-      // Try to change visibility to GROUP
+      // Try to change visibility to GROUP (not allowed as user-selectable option)
       const res = await request(app)
         .patch(`/posts/${postId}`)
         .set("Authorization", `Bearer ${token}`)
         .send({ visibility: "GROUP" });
       
       expect(res.status).toBe(400);
-      expect(res.text).toBe("Cannot set GROUP visibility on posts without a group");
+      expect(res.text).toBe("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
     });
 
     it("returns 400 bad requestwhen no valid fields to update", async () => {
@@ -968,7 +986,7 @@ describe("posts endpoints", () => {
     });
 
     it("successfully deletes post from feed after deletion", async () => {
-      const { token } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       // Create a post
       const createRes = await request(app)
@@ -984,7 +1002,8 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(feedBeforeRes.status).toBe(200);
-      expect(feedBeforeRes.body).toHaveLength(1);
+      const userPostsBefore = feedBeforeRes.body.filter((post: any) => post.userId === userId);
+      expect(userPostsBefore).toHaveLength(1);
       
       // Delete the post
       const deleteRes = await request(app)
@@ -999,7 +1018,8 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(feedAfterRes.status).toBe(200);
-      expect(feedAfterRes.body).toHaveLength(0);
+      const userPostsAfter = feedAfterRes.body.filter((post: any) => post.userId === userId);
+      expect(userPostsAfter).toHaveLength(0);
     });
 
     it("allows author to delete their own post even in a group", async () => {
@@ -1049,7 +1069,7 @@ describe("posts endpoints", () => {
     });
 
     it("preserves other posts when deleting one post", async () => {
-      const { token } = await createUserAndGetToken();
+      const { token, userId } = await createUserAndGetToken();
       
       // Create multiple posts
       const createRes1 = await request(app)
@@ -1075,7 +1095,8 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(feedBeforeRes.status).toBe(200);
-      expect(feedBeforeRes.body).toHaveLength(3);
+      const userPostsBefore = feedBeforeRes.body.filter((post: any) => post.userId === userId);
+      expect(userPostsBefore).toHaveLength(3);
       
       // Delete the middle post
       const deleteRes = await request(app)
@@ -1090,10 +1111,11 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
       
       expect(feedAfterRes.status).toBe(200);
-      expect(feedAfterRes.body).toHaveLength(2);
+      const userPostsAfter = feedAfterRes.body.filter((post: any) => post.userId === userId);
+      expect(userPostsAfter).toHaveLength(2);
       
       // Verify the remaining posts are the correct ones
-      const remainingContents = feedAfterRes.body.map((post: any) => post.content);
+      const remainingContents = userPostsAfter.map((post: any) => post.content);
       expect(remainingContents).toContain("First post");
       expect(remainingContents).toContain("Third post");
       expect(remainingContents).not.toContain("Second post");

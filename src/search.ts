@@ -135,4 +135,118 @@ router.get("/search/users", auth, async (req, res) => {
   }
 });
 
+// --- Search Posts with Audience-Based Authorization ---
+router.get("/search/posts", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const userId = (req.user as any).id;
+  const q = req.query.q as string;
+
+  // If query is missing or blank, return empty results
+  if (!q || typeof q !== "string" || q.trim().length === 0) {
+    return res.json({ posts: [] });
+  }
+
+  const query = q.trim();
+
+  try {
+    // Get user's connections for filtering
+    const connections = await prisma.userConnection.findMany({
+      where: { userId: userId },
+      select: { otherUserId: true, type: true }
+    });
+    const connectionUserIds = connections.map((c: any) => c.otherUserId);
+    const acquaintanceUserIds = connections
+      .filter((c: any) => c.type === "ACQUAINTANCE")
+      .map((c: any) => c.otherUserId);
+
+    // Get user's subnet memberships
+    const subnetMemberships = await prisma.subNetMember.findMany({
+      where: { userId: userId },
+      select: { subNetId: true }
+    });
+    const subnetIds = subnetMemberships.map((m: any) => m.subNetId);
+
+    // Get subnets owned by user
+    const ownedSubnets = await prisma.subNet.findMany({
+      where: { ownerId: userId },
+      select: { id: true }
+    });
+    const ownedSubnetIds = ownedSubnets.map((s: any) => s.id);
+    const allSubnetIds = [...new Set([...subnetIds, ...ownedSubnetIds])];
+
+    // Search posts with content matching query, applying audience filters
+    const posts = await prisma.post.findMany({
+      where: {
+        content: {
+          contains: query
+        },
+        OR: [
+          // User's own posts
+          { userId: userId },
+          // PUBLIC posts
+          { visibility: "PUBLIC" },
+          // CONNECTIONS posts from connected users
+          {
+            visibility: "CONNECTIONS",
+            userId: { in: connectionUserIds }
+          },
+          // ACQUAINTANCES posts from acquaintances
+          {
+            visibility: "ACQUAINTANCES",
+            userId: { in: acquaintanceUserIds }
+          },
+          // SUBNET posts from subnets user is in or owns
+          {
+            visibility: "SUBNET",
+            subNetId: { in: allSubnetIds }
+          }
+        ]
+      },
+      select: {
+        id: true,
+        content: true,
+        media: true,
+        orientation: true,
+        createdAt: true,
+        visibility: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            profilePhoto: true
+          }
+        },
+        subNet: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        group: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 50 // Limit results
+    });
+
+    return res.json({ posts });
+  } catch (e) {
+    if (e instanceof Error) {
+      return res.status(400).json({ error: e.message });
+    } else {
+      return res.status(400).json({ error: String(e) });
+    }
+  }
+});
+
 export default router;

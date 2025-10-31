@@ -5,13 +5,70 @@ import { auth } from "./misc.js";
 import { prismaClient as prisma } from "./prismaClient.js";
 const router = Router();
 
-// --- Create Post (≤500 chars). Public by default; or to a group if groupId provided ---
+// --- Helper: Check if user can view a post ---
+async function canUserViewPost(userId: string, post: any): Promise<boolean> {
+  // User can always see their own posts
+  if (post.userId === userId) {
+    return true;
+  }
+
+  // PUBLIC posts are visible to everyone
+  if (post.visibility === "PUBLIC") {
+    return true;
+  }
+
+  // CONNECTIONS posts - user must be connected (acquaintance, stranger, or following)
+  if (post.visibility === "CONNECTIONS") {
+    const connection = await prisma.userConnection.findFirst({
+      where: {
+        userId: userId,
+        otherUserId: post.userId,
+        type: { in: ["ACQUAINTANCE", "STRANGER", "IS_FOLLOWING"] }
+      }
+    });
+    return !!connection;
+  }
+
+  // ACQUAINTANCES posts - user must be an acquaintance
+  if (post.visibility === "ACQUAINTANCES") {
+    const connection = await prisma.userConnection.findFirst({
+      where: {
+        userId: userId,
+        otherUserId: post.userId,
+        type: "ACQUAINTANCE"
+      }
+    });
+    return !!connection;
+  }
+
+  // SUBNET posts - user must be a member of the subnet or the subnet owner
+  if (post.visibility === "SUBNET" && post.subNetId) {
+    const subnet = await prisma.subNet.findUnique({
+      where: { id: post.subNetId },
+      select: { ownerId: true }
+    });
+    
+    if (subnet && subnet.ownerId === userId) {
+      return true;
+    }
+
+    const member = await prisma.subNetMember.findUnique({
+      where: { subNetId_userId: { subNetId: post.subNetId, userId: userId } }
+    });
+    return !!member;
+  }
+
+  return false;
+}
+
+
+// --- Create Post (≤500 chars) with audience-based visibility ---
 router.post("/posts", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
     return res.status(401).send("Invalid token payload");
   }
   const me = req.user as any;
-  const { content, media, groupId, imageWidth, imageHeight } = req.body ?? {};
+  const { content, media, visibility, subnetId, imageWidth, imageHeight } = req.body ?? {};
 
   // Validate that at least one of content or media is provided
   const text = content ? String(content).trim() : null;
@@ -37,10 +94,18 @@ router.post("/posts", auth, async (req, res) => {
     orientation = height > width ? "PORTRAIT" : "LANDSCAPE";
   }
 
-  // Optional: block banned users from posting
+  // Block banned users from posting
   const meRow = await prisma.user.findUnique({ where: { id: me.id }, select: { isBanned: true } });
   if (!meRow) return res.status(404).send("User not found");
   if (meRow.isBanned) return res.status(403).send("account banned");
+
+  // Validate visibility
+  const validVisibilities = ["PUBLIC", "CONNECTIONS", "ACQUAINTANCES", "SUBNET"];
+  const postVisibility = visibility ? String(visibility).toUpperCase() : "PUBLIC";
+  
+  if (!validVisibilities.includes(postVisibility)) {
+    return res.status(400).send("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
+  }
 
   try {
     // Prepare post data
@@ -49,48 +114,63 @@ router.post("/posts", auth, async (req, res) => {
       content: text || null,
       media: mediaKey || null,
       orientation: orientation,
+      visibility: postVisibility,
     };
 
-    // No groupId -> public post
-    if (!groupId) {
-      postData.visibility = "PUBLIC";
-      const post = await prisma.post.create({
-        data: postData,
-        select: { id: true, content: true, media: true, createdAt: true, userId: true, groupId: true, visibility: true },
+    // Handle SUBNET visibility
+    if (postVisibility === "SUBNET") {
+      if (!subnetId) {
+        return res.status(400).send("subnetId required for SUBNET visibility");
+      }
+
+      const subnet = await prisma.subNet.findUnique({
+        where: { id: String(subnetId) },
+        select: { id: true, ownerId: true },
       });
-      return res.status(201).json(post);
+      if (!subnet) return res.status(404).send("Subnet not found");
+
+      // Check if user is the owner
+      if (subnet.ownerId === me.id) {
+        // Owner can post
+        postData.subNetId = subnet.id;
+      } else {
+        // Check if user is a member with posting permissions
+        const member = await prisma.subNetMember.findUnique({
+          where: { subNetId_userId: { subNetId: subnet.id, userId: me.id } },
+          select: { role: true },
+        });
+
+        if (!member) {
+          return res.status(403).send("Not a member of this subnet");
+        }
+
+        // Only OWNER, MANAGER, and CONTRIBUTOR can post to subnets
+        if (!["OWNER", "MANAGER", "CONTRIBUTOR"].includes(member.role)) {
+          return res.status(403).send("Insufficient permissions to post to this subnet. Must be OWNER, MANAGER, or CONTRIBUTOR");
+        }
+
+        postData.subNetId = subnet.id;
+      }
     }
 
-    // With groupId -> validate group & membership policy
-    const group = await prisma.group.findUnique({
-      where: { id: String(groupId) },
-      select: { id: true, groupPrivacy: true },
-    });
-    if (!group) return res.status(404).send("Group not found");
-
-    // Membership required for PRIVATE or PERSONAL; PUBLIC can be open-post (policy choice)
-    if (group.groupPrivacy === "PRIVATE" || group.groupPrivacy === "PERSONAL") {
-      const member = await prisma.groupMember.findUnique({
-        where: { userId_groupId: { userId: me.id, groupId: group.id } },
-        select: { membershipId: true },
-      });
-      if (!member) return res.status(403).send("Not a member of this group");
+    // Validate CONNECTIONS and ACQUAINTANCES visibility
+    if (postVisibility === "CONNECTIONS" || postVisibility === "ACQUAINTANCES") {
+      // No additional validation needed - these are network-wide visibility settings
+      // The feed filter will handle who can see these posts
     }
-    // PUBLIC group posts require membership as well (policy choice)
-    else {
-      const member = await prisma.groupMember.findUnique({
-        where: { userId_groupId: { userId: me.id, groupId: group.id } },
-        select: { membershipId: true },
-      });
-      if (!member) return res.status(403).send("Not a member of this group");
-    }
-
-    postData.groupId = group.id;
-    postData.visibility = "GROUP"; // force GROUP visibility
 
     const post = await prisma.post.create({
       data: postData,
-      select: { id: true, content: true, media: true, createdAt: true, userId: true, groupId: true, visibility: true },
+      select: { 
+        id: true, 
+        content: true, 
+        media: true, 
+        orientation: true,
+        createdAt: true, 
+        userId: true, 
+        subNetId: true,
+        visibility: true 
+      },
     });
     return res.status(201).json(post);
   } catch (e) {
@@ -100,11 +180,11 @@ router.post("/posts", auth, async (req, res) => {
 });
 
 
-// GET /feed  -> posts from me, my acquaintances, my strangers, and users I follow
+// GET /feed  -> posts visible to the user based on audience filters
 router.get("/feed", auth, async (req, res) => {
   const me = (req as any).user.id as string;
 
-  // Use adjacency table for fast fan-out
+  // Get user's connections
   const userConnections = await prisma.userConnection.findMany({
     where: {
       userId: me,
@@ -127,10 +207,58 @@ router.get("/feed", auth, async (req, res) => {
     }
   }
 
-  const authorIds = Array.from(new Set([me, ...acquaintances, ...strangers, ...followingIds]));
+  const connectedUserIds = Array.from(new Set([...acquaintances, ...strangers, ...followingIds]));
 
+  // Get user's subnet memberships
+  const subnetMemberships = await prisma.subNetMember.findMany({
+    where: { userId: me },
+    select: { subNetId: true }
+  });
+  const subnetIds = subnetMemberships.map((m: any) => m.subNetId);
+
+  // Get user's owned subnets
+  const ownedSubnets = await prisma.subNet.findMany({
+    where: { ownerId: me },
+    select: { id: true }
+  });
+  const ownedSubnetIds = ownedSubnets.map((s: any) => s.id);
+  const allSubnetIds = [...subnetIds, ...ownedSubnetIds];
+
+  // Fetch posts with audience-based filtering
   const posts = await prisma.post.findMany({
-    where: { userId: { in: authorIds } },
+    where: {
+      OR: [
+        // 1. User's own posts
+        { userId: me },
+        
+        // 2. PUBLIC posts from anyone
+        { visibility: "PUBLIC" },
+        
+        // 3. CONNECTIONS posts from connected users
+        {
+          AND: [
+            { visibility: "CONNECTIONS" },
+            { userId: { in: connectedUserIds } }
+          ]
+        },
+        
+        // 4. ACQUAINTANCES posts from acquaintances only
+        {
+          AND: [
+            { visibility: "ACQUAINTANCES" },
+            { userId: { in: Array.from(acquaintances) } }
+          ]
+        },
+        
+        // 5. SUBNET posts from subnets user is a member of or owns
+        {
+          AND: [
+            { visibility: "SUBNET" },
+            { subNetId: { in: allSubnetIds } }
+          ]
+        }
+      ]
+    },
     orderBy: { createdAt: "desc" },
     include: { user: true },
     take: 50,
@@ -148,12 +276,13 @@ router.get("/feed", auth, async (req, res) => {
       : "NONE";
 
   res.json(
-    posts.map(p => ({
+    posts.map((p: any) => ({
       id: p.id,
       userId: p.userId,
       content: p.content,
       media: p.media,
       orientation: p.orientation,
+      visibility: p.visibility,
       createdAt: p.createdAt,
       user: { 
         id: p.user.id, 
@@ -165,6 +294,58 @@ router.get("/feed", auth, async (req, res) => {
       relation: toRelation(p.userId),
     }))
   );
+});
+
+// GET /posts/:postId - Get a single post with authorization
+router.get("/posts/:postId", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = (req.user as any).id;
+  const { postId } = req.params;
+
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: { 
+        user: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            profilePhoto: true
+          }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).send("Post not found");
+    }
+
+    // Check if user can view this post
+    const canView = await canUserViewPost(me, post);
+    if (!canView) {
+      return res.status(403).send("You do not have permission to view this post");
+    }
+
+    res.json({
+      id: post.id,
+      userId: post.userId,
+      content: post.content,
+      media: post.media,
+      orientation: post.orientation,
+      visibility: post.visibility,
+      groupId: post.groupId,
+      subNetId: post.subNetId,
+      createdAt: post.createdAt,
+      user: post.user
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+  }
 });
 
 // PATCH /posts/:postId - Update post content and/or visibility
@@ -184,7 +365,14 @@ router.patch("/posts/:postId", auth, async (req, res) => {
   // Check if post exists and user owns it
   const existingPost = await prisma.post.findUnique({
     where: { id: postId },
-    select: { id: true, userId: true, content: true, visibility: true, groupId: true },
+    select: { 
+      id: true, 
+      userId: true, 
+      content: true, 
+      visibility: true, 
+      groupId: true,
+      subNetId: true 
+    },
   });
 
   if (!existingPost) {
@@ -209,20 +397,17 @@ router.patch("/posts/:postId", auth, async (req, res) => {
 
   // Validate and update visibility if provided
   if (visibility !== undefined) {
-    if (!["PUBLIC", "GROUP"].includes(visibility)) {
-      return res.status(400).send("Invalid visibility. Must be PUBLIC or GROUP");
+    const validVisibilities = ["PUBLIC", "CONNECTIONS", "ACQUAINTANCES", "SUBNET"];
+    if (!validVisibilities.includes(visibility)) {
+      return res.status(400).send("Invalid visibility. Must be PUBLIC, CONNECTIONS, ACQUAINTANCES, or SUBNET");
     }
     
-    // If changing to GROUP visibility, ensure post has a groupId
-    if (visibility === "GROUP" && !existingPost.groupId) {
-      return res.status(400).send("Cannot set GROUP visibility on posts without a group");
+    // If changing to SUBNET visibility, ensure post has a subNetId
+    if (visibility === "SUBNET" && !existingPost.subNetId) {
+      return res.status(400).send("Cannot set SUBNET visibility on posts without a subnet");
     }
     
-    // If changing to PUBLIC visibility, ensure post is not in a group
-    if (visibility === "PUBLIC" && existingPost.groupId) {
-      return res.status(400).send("Cannot set PUBLIC visibility on group posts");
-    }
-    
+    // Posts keep their context even if visibility changes
     updateData.visibility = visibility;
   }
 

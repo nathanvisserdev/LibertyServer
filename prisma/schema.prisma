@@ -34,9 +34,10 @@ enum ConnectionType {
 }
 
 enum PostVisibility {
-  PUBLIC        // shows in Public Square if not in PRIVATE/PERSONAL group
-  CONNECTIONS   // author's connections only
-  GROUP         // governed by group membership
+  PUBLIC
+  CONNECTIONS
+  ACQUAINTANCES
+  SUBNET
 }
 
 enum MediaOrientation {

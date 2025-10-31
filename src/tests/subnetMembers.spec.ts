@@ -185,7 +185,7 @@ describe("SubNet Members API", () => {
       expect(res.body.role).toBe("VIEWER");
     });
 
-    it("should reject adding member without userId", async () => {
+    it("should reject adding member without userId or userIds", async () => {
       const res = await request(app)
         .post(`/subnets/${testSubnetId}/members`)
         .set("Authorization", `Bearer ${ownerToken}`)
@@ -194,7 +194,7 @@ describe("SubNet Members API", () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain("userId is required");
+      expect(res.body.error).toContain("Either userId or userIds is required");
     });
 
     it("should reject invalid role", async () => {
@@ -243,8 +243,8 @@ describe("SubNet Members API", () => {
           userId: memberUserId
         });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toContain("already a member");
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain("already members of this subnet");
     });
 
     it("should reject adding user without connection", async () => {
@@ -291,7 +291,7 @@ describe("SubNet Members API", () => {
         });
 
       expect(res.status).toBe(404);
-      expect(res.body.error).toContain("User not found");
+      expect(res.body.error).toContain("One or more users not found");
     });
 
     it("should support different role types", async () => {
