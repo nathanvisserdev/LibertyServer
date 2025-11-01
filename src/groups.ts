@@ -563,6 +563,228 @@ router.get("/groups/:groupId/members", auth, async (req, res) => {
   }
 });
 
+// --- Get Group Invitees (Eligible Users to Invite) ---
+router.get("/groups/:groupId/invitees", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+  const groupId = req.params.groupId;
+  const includeParam = req.query.include as string | undefined;
+  const excludeParam = req.query.exclude as string | undefined;
+
+  if (!groupId) {
+    return res.status(400).send("Missing group id");
+  }
+
+  try {
+    // Fetch group and check permissions
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        adminId: true,
+        groupType: true
+      }
+    });
+
+    if (!group) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if user has permission to invite members
+    const isAdmin = group.adminId === userId;
+    
+    // Check if user is a member and not banned
+    const membership = await prisma.groupMember.findUnique({
+      where: {
+        userId_groupId: {
+          userId: userId,
+          groupId: groupId
+        }
+      },
+      select: {
+        isBanned: true
+      }
+    });
+
+    const isBanned = membership?.isBanned || false;
+
+    if (isBanned) {
+      return res.status(403).send("You are banned from this group");
+    }
+
+    // For AUTOCRATIC groups: only admin can invite
+    if (group.groupType === "AUTOCRATIC") {
+      if (!isAdmin) {
+        return res.status(403).send("Only the group admin can invite members to autocratic groups");
+      }
+    }
+    
+    // For ROUND_TABLE groups: admin and moderators can invite
+    if (group.groupType === "ROUND_TABLE") {
+      if (!isAdmin) {
+        // Check if user is a moderator in the round table
+        const roundTableMember = await prisma.roundTableMember.findUnique({
+          where: {
+            groupId_userId: {
+              groupId: groupId,
+              userId: userId
+            }
+          },
+          select: {
+            isModerator: true,
+            isExpelled: true
+          }
+        });
+
+        const isModerator = roundTableMember?.isModerator || false;
+        const isExpelled = roundTableMember?.isExpelled || false;
+
+        if (isExpelled) {
+          return res.status(403).send("You are expelled from this round table");
+        }
+
+        if (!isModerator) {
+          return res.status(403).send("Only the admin and moderators can invite members to round table groups");
+        }
+      }
+    }
+
+    // Get current user's privacy status
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isPrivate: true }
+    });
+
+    if (!currentUser) {
+      return res.status(404).send("User not found");
+    }
+
+    // Parse include/exclude parameters
+    const includeTypes = includeParam ? includeParam.split(',').map(t => t.trim()) : [];
+    const excludeTypes = excludeParam ? excludeParam.split(',').map(t => t.trim()) : [];
+
+    // Determine which types to fetch based on user privacy
+    let fetchAcquaintances = true;
+    let fetchStrangers = false;
+    let fetchFollowers = false;
+
+    // Private users can only access acquaintances and strangers
+    // Non-private users can access acquaintances and followers
+    if (currentUser.isPrivate) {
+      // Private user logic
+      if (includeTypes.length > 0) {
+        fetchAcquaintances = includeTypes.includes('connections');
+        fetchStrangers = includeTypes.includes('strangers');
+      } else if (excludeTypes.length > 0) {
+        fetchAcquaintances = !excludeTypes.includes('connections');
+        fetchStrangers = !excludeTypes.includes('strangers');
+      }
+    } else {
+      // Non-private user logic
+      if (includeTypes.length > 0) {
+        fetchAcquaintances = includeTypes.includes('connections');
+        fetchFollowers = includeTypes.includes('followers');
+      } else if (excludeTypes.length > 0) {
+        fetchAcquaintances = !excludeTypes.includes('connections');
+        fetchFollowers = !excludeTypes.includes('followers');
+      }
+    }
+
+    // Get existing group members to exclude
+    const existingMembers = await prisma.groupMember.findMany({
+      where: { groupId: groupId },
+      select: { userId: true }
+    });
+    const memberUserIds = new Set(existingMembers.map((m: any) => m.userId));
+
+    // Get users with pending invites to exclude
+    const pendingInvites = await prisma.groupInvite.findMany({
+      where: {
+        groupId: groupId,
+        status: "PENDING"
+      },
+      select: { inviteeId: true }
+    });
+    const pendingInviteUserIds = new Set(pendingInvites.map((i: any) => i.inviteeId));
+
+    // Combine exclusion sets
+    const excludedUserIds = new Set([...memberUserIds, ...pendingInviteUserIds]);
+
+    const eligibleUserIds: Set<string> = new Set();
+
+    // Fetch acquaintances (connections)
+    if (fetchAcquaintances) {
+      const connections = await prisma.userConnection.findMany({
+        where: {
+          userId: userId,
+          type: "ACQUAINTANCE",
+          otherUserId: { notIn: Array.from(excludedUserIds) }
+        },
+        select: {
+          otherUserId: true
+        }
+      });
+
+      connections.forEach((c: any) => eligibleUserIds.add(c.otherUserId));
+    }
+
+    // Fetch strangers (only for private users)
+    if (fetchStrangers) {
+      const strangers = await prisma.userConnection.findMany({
+        where: {
+          userId: userId,
+          type: "STRANGER",
+          otherUserId: { notIn: Array.from(excludedUserIds) }
+        },
+        select: {
+          otherUserId: true
+        }
+      });
+
+      strangers.forEach((s: any) => eligibleUserIds.add(s.otherUserId));
+    }
+
+    // Fetch followers (only for non-private users)
+    if (fetchFollowers) {
+      const followers = await prisma.userConnection.findMany({
+        where: {
+          otherUserId: userId,
+          type: "IS_FOLLOWING",
+          userId: { notIn: Array.from(excludedUserIds) }
+        },
+        select: {
+          userId: true
+        }
+      });
+
+      followers.forEach((f: any) => eligibleUserIds.add(f.userId));
+    }
+
+    // Fetch user details for all eligible users
+    const eligibleUsers = await prisma.user.findMany({
+      where: {
+        id: { in: Array.from(eligibleUserIds) }
+      },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        profilePhoto: true
+      }
+    });
+
+    return res.status(200).json(eligibleUsers);
+
+  } catch (error) {
+    console.error("Error fetching group invitees:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 // --- Join Group Request ---
 router.post("/groups/:id/join", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
