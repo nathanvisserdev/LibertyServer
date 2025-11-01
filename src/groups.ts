@@ -785,6 +785,181 @@ router.get("/groups/:groupId/invitees", auth, async (req, res) => {
   }
 });
 
+// --- Send Group Invites ---
+router.post("/groups/:groupId/invite", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const me = req.user as any;
+  const userId = me.id;
+  const groupId = req.params.groupId;
+  const { userIds } = req.body;
+
+  if (!groupId) {
+    return res.status(400).send("Missing group id");
+  }
+
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).send("Missing or invalid userIds array");
+  }
+
+  try {
+    // Fetch group and check permissions
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        adminId: true,
+        groupType: true
+      }
+    });
+
+    if (!group) {
+      return res.status(404).send("Group not found");
+    }
+
+    // Check if user has permission to invite members
+    const isAdmin = group.adminId === userId;
+    
+    // Check if user is a member and not banned
+    const membership = await prisma.groupMember.findUnique({
+      where: {
+        userId_groupId: {
+          userId: userId,
+          groupId: groupId
+        }
+      },
+      select: {
+        isBanned: true
+      }
+    });
+
+    const isBanned = membership?.isBanned || false;
+
+    if (isBanned) {
+      return res.status(403).send("You are banned from this group");
+    }
+
+    // For AUTOCRATIC groups: only admin can invite
+    if (group.groupType === "AUTOCRATIC") {
+      if (!isAdmin) {
+        return res.status(403).send("Only the group admin can invite members to autocratic groups");
+      }
+    }
+    
+    // For ROUND_TABLE groups: admin and moderators can invite
+    if (group.groupType === "ROUND_TABLE") {
+      if (!isAdmin) {
+        // Check if user is a moderator in the round table
+        const roundTableMember = await prisma.roundTableMember.findUnique({
+          where: {
+            groupId_userId: {
+              groupId: groupId,
+              userId: userId
+            }
+          },
+          select: {
+            isModerator: true,
+            isExpelled: true
+          }
+        });
+
+        const isModerator = roundTableMember?.isModerator || false;
+        const isExpelled = roundTableMember?.isExpelled || false;
+
+        if (isExpelled) {
+          return res.status(403).send("You are expelled from this round table");
+        }
+
+        if (!isModerator) {
+          return res.status(403).send("Only the admin and moderators can invite members to round table groups");
+        }
+      }
+    }
+
+    // Create invites for each user
+    const invites = [];
+    const errors = [];
+
+    for (const inviteeId of userIds) {
+      try {
+        // Check if user exists
+        const invitee = await prisma.user.findUnique({
+          where: { id: inviteeId },
+          select: { id: true }
+        });
+
+        if (!invitee) {
+          errors.push({ userId: inviteeId, error: "User not found" });
+          continue;
+        }
+
+        // Check if user is already a member
+        const existingMembership = await prisma.groupMember.findUnique({
+          where: {
+            userId_groupId: {
+              userId: inviteeId,
+              groupId: groupId
+            }
+          }
+        });
+
+        if (existingMembership) {
+          errors.push({ userId: inviteeId, error: "Already a member" });
+          continue;
+        }
+
+        // Check if there's already a pending invite
+        const existingInvite = await prisma.groupInvite.findFirst({
+          where: {
+            groupId: groupId,
+            inviteeId: inviteeId,
+            status: "PENDING"
+          }
+        });
+
+        if (existingInvite) {
+          errors.push({ userId: inviteeId, error: "Invite already pending" });
+          continue;
+        }
+
+        // Create the invite
+        const invite = await prisma.groupInvite.create({
+          data: {
+            groupId: groupId,
+            inviterId: userId,
+            inviteeId: inviteeId,
+            status: "PENDING"
+          },
+          select: {
+            id: true,
+            groupId: true,
+            inviterId: true,
+            inviteeId: true,
+            status: true,
+            createdAt: true
+          }
+        });
+
+        invites.push(invite);
+      } catch (error) {
+        console.error(`Error creating invite for user ${inviteeId}:`, error);
+        errors.push({ userId: inviteeId, error: "Failed to create invite" });
+      }
+    }
+
+    return res.status(200).json({
+      message: `Successfully sent ${invites.length} invite(s)`,
+      invites: invites,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error("Error sending group invites:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 // --- Join Group Request ---
 router.post("/groups/:id/join", auth, async (req, res) => {
   if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
