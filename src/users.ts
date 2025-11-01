@@ -479,4 +479,132 @@ router.get("/users/:id/followers", auth, async (req, res) => {
   }
 });
 
+// --- Get list of users that a specific user is following ---
+router.get("/users/:id/following", auth, async (req, res) => {
+  if (!req.user || typeof req.user !== "object" || !("id" in req.user)) {
+    return res.status(401).send("Invalid token payload");
+  }
+  const sessionUserId = (req.user as any).id;
+  const targetUserId = req.params.id;
+
+  if (!targetUserId) {
+    return res.status(400).send("Missing user ID");
+  }
+
+  try {
+    // Check if target user exists and is not banned/hidden
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        isPrivate: true,
+        isBanned: true,
+        isHidden: true
+      }
+    });
+
+    if (!targetUser || targetUser.isBanned || targetUser.isHidden) {
+      return res.status(404).send("User not found");
+    }
+
+    // Check for blocks in either direction between session user and target user
+    const blockExists = await prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: sessionUserId, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: sessionUserId }
+        ]
+      }
+    });
+
+    if (blockExists) {
+      return res.status(404).send("User not found");
+    }
+
+    // If user is private, check if session user is connected
+    if (targetUser.isPrivate && sessionUserId !== targetUserId) {
+      const connection = await prisma.userConnection.findFirst({
+        where: {
+          userId: sessionUserId,
+          otherUserId: targetUserId,
+          type: { in: ["ACQUAINTANCE", "STRANGER"] }
+        }
+      });
+
+      if (!connection) {
+        return res.status(403).send("This user's following list is private");
+      }
+    }
+
+    // Get all users that the target user is following
+    const followingConnections = await prisma.userConnection.findMany({
+      where: {
+        userId: targetUserId,
+        type: "IS_FOLLOWING"
+      },
+      select: {
+        otherUserId: true
+      }
+    });
+
+    const followingIds = followingConnections.map((fc: any) => fc.otherUserId);
+
+    if (followingIds.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    // Get blocks involving the session user
+    const sessionUserBlocks = await prisma.block.findMany({
+      where: {
+        OR: [
+          { blockerId: sessionUserId },
+          { blockedId: sessionUserId }
+        ]
+      },
+      select: {
+        blockerId: true,
+        blockedId: true
+      }
+    });
+
+    const blockedUserIds = new Set(
+      sessionUserBlocks.map((b: any) => 
+        b.blockerId === sessionUserId ? b.blockedId : b.blockerId
+      )
+    );
+
+    // Filter out blocked users and get user details
+    const following = await prisma.user.findMany({
+      where: {
+        id: { in: followingIds },
+        isBanned: false,
+        isHidden: false,
+        NOT: {
+          id: { in: Array.from(blockedUserIds) }
+        }
+      },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        profilePhoto: true
+      },
+      orderBy: {
+        username: 'asc'
+      }
+    });
+
+    return res.status(200).json(following);
+
+  } catch (e) {
+    console.error("Error fetching following:", e);
+    if (e instanceof Error) {
+      return res.status(400).json({ error: e.message });
+    } else {
+      return res.status(400).json({ error: String(e) });
+    }
+  }
+});
+
 export default router;
