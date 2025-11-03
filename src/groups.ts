@@ -1152,6 +1152,14 @@ router.post("/groups", auth, async (req, res) => {
       },
     });
 
+    // Add the requesting user as a member of the group
+    await prisma.groupMember.create({
+      data: {
+        userId: me.id,
+        groupId: group.id,
+      },
+    });
+
     // For Round Table groups, create RoundTable record and RoundTableMember entries
     if (String(groupType).toUpperCase() === "ROUND_TABLE") {
       // Create RoundTable record
