@@ -41,6 +41,11 @@ enum PostVisibility {
   SUBNET
 }
 
+enum PostType { 
+  FEED 
+  STORY 
+}
+
 enum MediaOrientation {
   LANDSCAPE
   PORTRAIT
@@ -49,6 +54,13 @@ enum MediaOrientation {
 enum GroupType {
   AUTOCRATIC
   ROUND_TABLE
+}
+
+enum ReactionType { 
+  BELL 
+  TRUE 
+  FALSE 
+  EMOJI 
 }
 
 enum GroupPrivacy {
@@ -147,6 +159,8 @@ model User {
   isBanned      Boolean   @default(false)
 
   posts         Post[]
+  comments      Comment[]
+  reactions     Reaction[]
   groups        GroupMember[]
 
   userConnections   UserConnection[] @relation("UserConnection_user")
@@ -434,23 +448,51 @@ model GroupMember {
 }
 
 model Post {
-  postId        String   @id @default(cuid())
-  content       String?
-  media         String?
-  orientation   MediaOrientation?
-  visibility    PostVisibility @default(PUBLIC)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  userId        String
-  groupId       String?
-  subNetId      String?
-  user          User       @relation(fields: [userId], references: [id])
-  group         Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  subNet        SubNet?    @relation(fields: [subNetId], references: [id], onDelete: SetNull)
-  @@index([userId, createdAt, postId])
-  @@index([groupId, createdAt, postId])
-  @@index([subNetId, createdAt, postId])
+  postId       String   @id @default(cuid())
+  content      String?
+  media        String?
+  orientation  MediaOrientation?
+  visibility   PostVisibility @default(PUBLIC)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+  groupId      String?     // null = personal post
+  subNetId     String?
+  user         User       @relation(fields: [userId], references: [id])
+  group        Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  subNet       SubNet?    @relation(fields: [subNetId], references: [id], onDelete: SetNull)
+  comments     Comment[]
+  reactions    Reaction[]
+  @@index([userId, createdAt, postId])     // profile feed
+  @@index([groupId, createdAt, postId])    // group feed
+  @@index([subNetId, createdAt, postId])   // subnet feed
   @@index([visibility])
+}
+
+model Comment {
+  commentId  String   @id @default(cuid())
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  userId     String
+  postId     String
+  parentId   String?   // reply to another comment
+  user       User @relation(fields: [userId], references: [id])
+  post       Post @relation(fields: [postId], references: [postId], onDelete: Cascade)
+  @@index([postId, parentId, createdAt])
+}
+
+model Reaction {
+  reactionId String   @id @default(cuid())
+  userId     String
+  postId     String
+  type       ReactionType
+  emoji      String?  // only used when type = EMOJI
+  createdAt  DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  post Post @relation(fields: [postId], references: [postId])
+  @@unique([userId, postId, type, emoji])
+  @@index([postId, type, createdAt])
 }
 
 model ConnectionRequest {
