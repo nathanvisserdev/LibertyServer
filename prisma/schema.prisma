@@ -60,6 +60,7 @@ enum ReactionType {
   BELL 
   TRUE 
   FALSE 
+  OUT_OF_CONTEXT
   EMOJI 
 }
 
