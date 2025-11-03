@@ -118,7 +118,7 @@ router.get("/users/:id", auth, async (req, res) => {
         },
         orderBy: { createdAt: "desc" },
         select: {
-          id: true,
+          postId: true,
           content: true,
           media: true,
           orientation: true,

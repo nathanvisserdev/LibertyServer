@@ -27,9 +27,9 @@ router.post("/media/presign-read", auth, async (req, res) => {
   if (postId && typeof postId === "string") {
     try {
       const post = await prisma.post.findUnique({
-        where: { id: postId },
+        where: { postId: postId },
         select: {
-          id: true,
+          postId: true,
           userId: true,
           visibility: true,
           subNetId: true,

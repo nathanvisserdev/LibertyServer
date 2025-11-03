@@ -434,26 +434,22 @@ model GroupMember {
 }
 
 model Post {
-  id            String   @id @default(cuid())
+  postId        String   @id @default(cuid())
   content       String?
   media         String?
   orientation   MediaOrientation?
   visibility    PostVisibility @default(PUBLIC)
-
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
   userId        String
   groupId       String?
-  subNetId      String?     // target audience within user's network
-
+  subNetId      String?
   user          User       @relation(fields: [userId], references: [id])
-  group         Group?     @relation(fields: [groupId], references: [id])
+  group         Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   subNet        SubNet?    @relation(fields: [subNetId], references: [id], onDelete: SetNull)
-
-  @@index([userId, createdAt, id])         // profile feed keyset
-  @@index([groupId, createdAt, id])        // group feed
-  @@index([subNetId, createdAt, id])       // subnet feed
+  @@index([userId, createdAt, postId])
+  @@index([groupId, createdAt, postId])
+  @@index([subNetId, createdAt, postId])
   @@index([visibility])
 }
 

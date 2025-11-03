@@ -365,7 +365,7 @@ describe("posts endpoints", () => {
       expect(userPosts).toHaveLength(1);
       
       const post = userPosts[0];
-      expect(post).toHaveProperty("id");
+      expect(post).toHaveProperty("postId");
       expect(post).toHaveProperty("userId");
       expect(post).toHaveProperty("content");
       expect(post).toHaveProperty("createdAt");
@@ -380,7 +380,7 @@ describe("posts endpoints", () => {
       expect(post.user).not.toHaveProperty("password");
       
       // Verify data types
-      expect(typeof post.id).toBe("string");
+      expect(typeof post.postId).toBe("string");
       expect(typeof post.userId).toBe("string");
       expect(typeof post.content).toBe("string");
       expect(typeof post.createdAt).toBe("string");
@@ -568,7 +568,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token1}`)
         .send({ content: "Original post" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Create second user
       const { token: token2 } = await createUserAndGetToken();
@@ -592,7 +592,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Try to update with empty content
       const res = await request(app)
@@ -613,7 +613,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const longContent = "a".repeat(501);
       
       // Try to update with too long content
@@ -636,7 +636,7 @@ describe("posts endpoints", () => {
         .send({ content: "Original content" });
       
       expect(createRes.status).toBe(201);
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Try to update with invalid visibility
       const res = await request(app)
@@ -657,7 +657,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Public post" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Try to change visibility to GROUP (not allowed as user-selectable option)
       const res = await request(app)
@@ -678,7 +678,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Try to update with no valid fields
       const res = await request(app)
@@ -699,7 +699,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const updatedContent = "Updated content";
       
       // Update the post content
@@ -709,7 +709,7 @@ describe("posts endpoints", () => {
         .send({ content: updatedContent });
       
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("id", postId);
+      expect(res.body).toHaveProperty("postId", postId);
       expect(res.body).toHaveProperty("content", updatedContent);
       expect(res.body).toHaveProperty("userId", userId);
       expect(res.body).toHaveProperty("createdAt");
@@ -726,7 +726,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const updatedContent = "a".repeat(500);
       
       // Update the post content
@@ -749,7 +749,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const updatedContent = "  Updated content with spaces  ";
       const trimmedContent = updatedContent.trim();
       
@@ -772,7 +772,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const updatedContent = "Updated with émojis 🚀 and special chars: @#$%^&*()";
       
       // Update the post content
@@ -794,7 +794,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Update with number content
       const res = await request(app)
@@ -815,7 +815,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const originalCreatedAt = createRes.body.createdAt;
       const updatedContent = "Updated content";
       
@@ -834,7 +834,7 @@ describe("posts endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body.content).toBe(updatedContent);
       expect(res.body.userId).toBe(userId); // Should remain unchanged
-      expect(res.body.id).toBe(postId); // Should remain unchanged
+      expect(res.body.postId).toBe(postId); // Should remain unchanged
       expect(res.body.createdAt).toBe(originalCreatedAt); // Should remain unchanged
       expect(res.body.groupId).toBe(null); // Should remain unchanged
     });
@@ -848,7 +848,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       const originalCreatedAt = createRes.body.createdAt;
       const originalVisibility = createRes.body.visibility;
       const updatedContent = "Only content updated";
@@ -862,7 +862,7 @@ describe("posts endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body.content).toBe(updatedContent);
       expect(res.body.userId).toBe(userId);
-      expect(res.body.id).toBe(postId);
+      expect(res.body.postId).toBe(postId);
       expect(res.body.createdAt).toBe(originalCreatedAt);
       expect(res.body.visibility).toBe(originalVisibility);
       expect(res.body.groupId).toBe(null);
@@ -877,7 +877,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Original content" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Update the post
       const res = await request(app)
@@ -896,7 +896,7 @@ describe("posts endpoints", () => {
       expect(res.body).toHaveProperty("visibility");
       
       // Verify data types
-      expect(typeof res.body.id).toBe("string");
+      expect(typeof res.body.postId).toBe("string");
       expect(typeof res.body.content).toBe("string");
       expect(typeof res.body.createdAt).toBe("string");
       expect(typeof res.body.userId).toBe("string");
@@ -943,7 +943,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token1}`)
         .send({ content: "Original post" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Create second user
       const { token: token2 } = await createUserAndGetToken();
@@ -966,7 +966,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Post to be deleted" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Delete the post
       const res = await request(app)
@@ -994,7 +994,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Post to be deleted" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Verify post appears in feed
       const feedBeforeRes = await request(app)
@@ -1031,7 +1031,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Author's post" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Author should be able to delete their own post
       const res = await request(app)
@@ -1050,7 +1050,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Post to be deleted twice" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Delete the post first time
       const firstDeleteRes = await request(app)
@@ -1087,7 +1087,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Third post" });
       
-      const postToDeleteId = createRes2.body.id;
+      const postToDeleteId = createRes2.body.postId;
       
       // Verify all posts exist in feed
       const feedBeforeRes = await request(app)
@@ -1131,7 +1131,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: specialContent });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Delete the post
       const res = await request(app)
@@ -1150,7 +1150,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Post to delete" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Delete the post (should succeed)
       const res = await request(app)
@@ -1175,7 +1175,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Public post for auth test" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Author should be able to delete
       const res = await request(app)
@@ -1194,7 +1194,7 @@ describe("posts endpoints", () => {
         .set("Authorization", `Bearer ${token}`)
         .send({ content: "Post to check response format" });
       
-      const postId = createRes.body.id;
+      const postId = createRes.body.postId;
       
       // Delete the post
       const res = await request(app)

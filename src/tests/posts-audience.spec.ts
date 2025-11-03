@@ -237,25 +237,25 @@ describe("Posts Audience Authorization", () => {
         .post("/posts")
         .set("Authorization", `Bearer ${aliceToken}`)
         .send({ content: "Public", visibility: "PUBLIC" });
-      publicPostId = publicRes.body.id;
+      publicPostId = publicRes.body.postId;
 
       const connectionsRes = await request(app)
         .post("/posts")
         .set("Authorization", `Bearer ${aliceToken}`)
         .send({ content: "Connections", visibility: "CONNECTIONS" });
-      connectionsPostId = connectionsRes.body.id;
+      connectionsPostId = connectionsRes.body.postId;
 
       const acquaintancesRes = await request(app)
         .post("/posts")
         .set("Authorization", `Bearer ${aliceToken}`)
         .send({ content: "Acquaintances", visibility: "ACQUAINTANCES" });
-      acquaintancesPostId = acquaintancesRes.body.id;
+      acquaintancesPostId = acquaintancesRes.body.postId;
 
       const subnetRes = await request(app)
         .post("/posts")
         .set("Authorization", `Bearer ${aliceToken}`)
         .send({ content: "Subnet", visibility: "SUBNET", subnetId: subnetId });
-      subnetPostId = subnetRes.body.id;
+      subnetPostId = subnetRes.body.postId;
     });
 
     it("should show all Alice's posts to Alice herself", async () => {
@@ -264,7 +264,7 @@ describe("Posts Audience Authorization", () => {
         .set("Authorization", `Bearer ${aliceToken}`);
 
       expect(res.status).toBe(200);
-      const postIds = res.body.map((p: any) => p.id);
+      const postIds = res.body.map((p: any) => p.postId);
       expect(postIds).toContain(publicPostId);
       expect(postIds).toContain(connectionsPostId);
       expect(postIds).toContain(acquaintancesPostId);
@@ -277,7 +277,7 @@ describe("Posts Audience Authorization", () => {
         .set("Authorization", `Bearer ${bobToken}`);
 
       expect(res.status).toBe(200);
-      const postIds = res.body.map((p: any) => p.id);
+      const postIds = res.body.map((p: any) => p.postId);
       expect(postIds).toContain(publicPostId);
       expect(postIds).toContain(connectionsPostId);
       expect(postIds).toContain(acquaintancesPostId);
@@ -290,7 +290,7 @@ describe("Posts Audience Authorization", () => {
         .set("Authorization", `Bearer ${charlieToken}`);
 
       expect(res.status).toBe(200);
-      const postIds = res.body.map((p: any) => p.id);
+      const postIds = res.body.map((p: any) => p.postId);
       expect(postIds).toContain(publicPostId);
       expect(postIds).toContain(connectionsPostId);
       expect(postIds).not.toContain(acquaintancesPostId); // Not an acquaintance
@@ -306,7 +306,7 @@ describe("Posts Audience Authorization", () => {
         .post("/posts")
         .set("Authorization", `Bearer ${aliceToken}`)
         .send({ content: "Acquaintances only", visibility: "ACQUAINTANCES" });
-      privatePostId = res.body.id;
+      privatePostId = res.body.postId;
     });
 
     it("should allow Bob (acquaintance) to view ACQUAINTANCES post", async () => {

@@ -205,7 +205,7 @@ router.get("/search/posts", auth, async (req, res) => {
         ]
       },
       select: {
-        id: true,
+        postId: true,
         content: true,
         media: true,
         orientation: true,

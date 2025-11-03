@@ -129,7 +129,7 @@ describe("Media Audience Authorization", () => {
         media: publicMediaKey,
         visibility: "PUBLIC"
       });
-    publicPostId = publicPost.body.id;
+    publicPostId = publicPost.body.postId;
 
     const acquaintancesPost = await request
       .post("/posts")
@@ -139,7 +139,7 @@ describe("Media Audience Authorization", () => {
         media: acquaintancesMediaKey,
         visibility: "ACQUAINTANCES"
       });
-    acquaintancesPostId = acquaintancesPost.body.id;
+    acquaintancesPostId = acquaintancesPost.body.postId;
   }, 30000);
 
   afterAll(async () => {

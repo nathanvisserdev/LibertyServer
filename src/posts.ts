@@ -174,7 +174,7 @@ router.post("/posts", auth, async (req, res) => {
     const post = await prisma.post.create({
       data: postData,
       select: { 
-        id: true, 
+        postId: true, 
         content: true, 
         media: true, 
         orientation: true,
@@ -297,7 +297,7 @@ router.get("/feed", auth, async (req, res) => {
 
   res.json(
     posts.map((p: any) => ({
-      id: p.id,
+      postId: p.postId,
       userId: p.userId,
       content: p.content,
       media: p.media,
@@ -326,7 +326,7 @@ router.get("/posts/:postId", auth, async (req, res) => {
 
   try {
     const post = await prisma.post.findUnique({
-      where: { id: postId },
+      where: { postId: postId },
       include: { 
         user: {
           select: {
@@ -351,7 +351,7 @@ router.get("/posts/:postId", auth, async (req, res) => {
     }
 
     res.json({
-      id: post.id,
+      postId: post.postId,
       userId: post.userId,
       content: post.content,
       media: post.media,
@@ -384,9 +384,9 @@ router.patch("/posts/:postId", auth, async (req, res) => {
 
   // Check if post exists and user owns it
   const existingPost = await prisma.post.findUnique({
-    where: { id: postId },
+    where: { postId: postId },
     select: { 
-      id: true, 
+      postId: true, 
       userId: true, 
       content: true, 
       visibility: true, 
@@ -438,10 +438,10 @@ router.patch("/posts/:postId", auth, async (req, res) => {
 
   try {
     const updatedPost = await prisma.post.update({
-      where: { id: postId },
+      where: { postId: postId },
       data: updateData,
       select: { 
-        id: true, 
+        postId: true, 
         content: true, 
         createdAt: true, 
         userId: true, 
@@ -473,9 +473,9 @@ router.delete("/posts/:postId", auth, async (req, res) => {
   try {
     // Check if post exists and get its details
     const existingPost = await prisma.post.findUnique({
-      where: { id: postId },
+      where: { postId: postId },
       select: { 
-        id: true, 
+        postId: true, 
         userId: true, 
         groupId: true, 
         visibility: true 
@@ -511,7 +511,7 @@ router.delete("/posts/:postId", auth, async (req, res) => {
 
     // Delete the post
     await prisma.post.delete({
-      where: { id: postId },
+      where: { postId: postId },
     });
 
     return res.status(204).end();
