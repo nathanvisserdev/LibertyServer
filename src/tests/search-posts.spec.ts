@@ -309,7 +309,7 @@ describe("Post Search with Audience Authorization", () => {
       expect(res.body.posts.length).toBeGreaterThan(0);
       
       const firstPost = res.body.posts[0];
-      expect(firstPost).toHaveProperty("id");
+      expect(firstPost).toHaveProperty("postId");
       expect(firstPost).toHaveProperty("content");
       expect(firstPost).toHaveProperty("visibility");
       expect(firstPost).toHaveProperty("createdAt");

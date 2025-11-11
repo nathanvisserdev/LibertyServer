@@ -146,7 +146,7 @@ describe("posts endpoints", () => {
         .send({ content });
       
       expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty("id");
+      expect(res.body).toHaveProperty("postId");
       expect(res.body).toHaveProperty("content", content);
       expect(res.body).toHaveProperty("createdAt");
       expect(res.body).toHaveProperty("userId", userId);
@@ -888,7 +888,7 @@ describe("posts endpoints", () => {
       expect(res.status).toBe(200);
       
       // Verify all required fields are present
-      expect(res.body).toHaveProperty("id");
+      expect(res.body).toHaveProperty("postId");
       expect(res.body).toHaveProperty("content");
       expect(res.body).toHaveProperty("createdAt");
       expect(res.body).toHaveProperty("userId");
